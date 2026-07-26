@@ -664,7 +664,7 @@ export default function DemoWorkspace() {
       </main>
 
       {forthOpen && (
-        <section className="fixed inset-0 z-40 flex flex-col overscroll-contain border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
+        <section className="fixed inset-0 z-40 flex flex-col overscroll-contain border-l border-line bg-app xl:static xl:z-0 xl:w-[38%] xl:max-w-xl">
           <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="text-sm font-semibold text-pm">Forth board</span>
             <a
