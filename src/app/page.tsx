@@ -15,9 +15,15 @@ const PILLARS = [
     body: 'Channels, DMs, threads, @mentions, reactions, unread, presence, ⌘K search.',
   },
   {
-    title: 'Try in 30 seconds',
+    title: 'Try in 60 seconds',
     body: 'Interactive /demo — post, react, open threads — no account required.',
   },
+]
+
+const PATH = [
+  'Open the demo (no signup)',
+  'Spot the WEBHOOK badge in #general',
+  'Reply in a thread · post a message · open Forth',
 ]
 
 export default async function Landing() {
@@ -72,6 +78,22 @@ export default async function Landing() {
           >
             Forth board ↗
           </a>
+        </div>
+
+        <div className="max-w-xl rounded-xl border border-line bg-panel/80 p-5 backdrop-blur">
+          <p className="text-xs font-semibold uppercase tracking-wider text-accent">
+            Reviewer path · 60 seconds
+          </p>
+          <ol className="mt-3 space-y-2">
+            {PATH.map((step, i) => (
+              <li key={step} className="flex gap-3 text-sm">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent text-xs font-semibold text-on-accent">
+                  {i + 1}
+                </span>
+                <span className="pt-0.5 leading-relaxed">{step}</span>
+              </li>
+            ))}
+          </ol>
         </div>
 
         <dl className="grid max-w-3xl gap-6 border-t border-line pt-8 sm:grid-cols-3">

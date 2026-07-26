@@ -79,6 +79,15 @@ const SEED: Record<string, DemoMessage[]> = {
         { emoji: '🎉', count: 4 },
         { emoji: '👀', count: 2 },
       ],
+      replies: [
+        {
+          id: 41,
+          author: 'Calvin W.',
+          initial: 'C',
+          time: '3:58 PM',
+          body: 'Click Reply on a root message to open this side panel — keeps #general clean.',
+        },
+      ],
     },
   ],
   'project-2': [
@@ -167,25 +176,31 @@ const TOUR_STEPS = [
   {
     id: 'webhook',
     title: '1 · Live Forth webhook',
-    body: 'The message tagged WEBHOOK was not typed — Forth posted it when a ticket shipped.',
-    action: 'Jump to it',
+    body: 'Find the amber WEBHOOK badge in #general — Forth posted that when a ticket shipped. Nobody typed it.',
+    action: 'Jump to webhook',
+  },
+  {
+    id: 'thread',
+    title: '2 · Open a thread',
+    body: 'Click Reply under a message. Replies stay in a side panel so #general stays readable.',
+    action: 'Open a reply',
   },
   {
     id: 'card',
-    title: '2 · Deep-link cards',
-    body: 'Paste a Forth URL and it renders as a labelled board card under the message.',
+    title: '3 · Deep-link cards',
+    body: 'Forth URLs become labelled cards. Jump to #project-2 to see one under Calvin’s message.',
     action: 'Show a card',
   },
   {
     id: 'embed',
-    title: '3 · Board beside chat',
-    body: 'Open the Forth pane and move tickets without leaving the conversation.',
+    title: '4 · Board beside chat',
+    body: 'The Forth board sits next to the conversation — move a ticket without losing the thread.',
     action: 'Open board',
   },
   {
     id: 'compose',
-    title: '4 · Try it yourself',
-    body: 'This demo is interactive. Post, react, open a DM — nothing hits production.',
+    title: '5 · Try it yourself',
+    body: 'Post, react, or open a DM in the sidebar. Everything stays local — nothing hits production.',
     action: 'Focus composer',
   },
 ] as const
@@ -322,17 +337,26 @@ export default function DemoWorkspace() {
     const id = TOUR_STEPS[step]?.id
     if (id === 'webhook') {
       setScope({ kind: 'channel', slug: 'general' })
+      setThreadId(null)
       setFlashId(3)
       setForthOpen(true)
+    } else if (id === 'thread') {
+      setScope({ kind: 'channel', slug: 'general' })
+      setForthOpen(false)
+      setThreadId(4)
+      setFlashId(4)
     } else if (id === 'card') {
       setScope({ kind: 'channel', slug: 'project-2' })
+      setThreadId(null)
       setFlashId(6)
       setForthOpen(false)
     } else if (id === 'embed') {
+      setThreadId(null)
       setForthOpen(true)
       setScope({ kind: 'channel', slug: 'general' })
     } else if (id === 'compose') {
       setScope({ kind: 'channel', slug: 'general' })
+      setThreadId(null)
       setForthOpen(true)
       queueMicrotask(() => {
         document.getElementById('demo-composer')?.focus()
