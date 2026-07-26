@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ThemeToggle from './ThemeToggle'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { motionTokens } from '@/lib/motionTokens'
 import { FORTH_BASE_URL, extractForthLinks } from '@/lib/forth'
 
 /**
@@ -236,7 +238,7 @@ function nowLabel(): string {
 
 export default function DemoWorkspace() {
   const [scope, setScope] = useState<Scope>({ kind: 'channel', slug: 'general' })
-  const [forthOpen, setForthOpen] = useState(true)
+  const [forthOpen, setForthOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState('')
   const [conversations, setConversations] = useState(SEED)
@@ -246,6 +248,13 @@ export default function DemoWorkspace() {
   const [flashId, setFlashId] = useState<number | null>(null)
   const [threadId, setThreadId] = useState<number | null>(null)
   const [threadDraft, setThreadDraft] = useState('')
+
+  const reduceMotion = useReducedMotion()
+
+  // Desktop: open Forth beside chat. Mobile: keep chat first (Forth is fullscreen).
+  useEffect(() => {
+    if (window.matchMedia('(min-width: 1280px)').matches) setForthOpen(true)
+  }, [])
 
   const key = scopeKey(scope)
   const messages = conversations[key] ?? []
@@ -339,7 +348,7 @@ export default function DemoWorkspace() {
       setScope({ kind: 'channel', slug: 'general' })
       setThreadId(null)
       setFlashId(3)
-      setForthOpen(true)
+      setForthOpen(false)
     } else if (id === 'thread') {
       setScope({ kind: 'channel', slug: 'general' })
       setForthOpen(false)
@@ -357,7 +366,7 @@ export default function DemoWorkspace() {
     } else if (id === 'compose') {
       setScope({ kind: 'channel', slug: 'general' })
       setThreadId(null)
-      setForthOpen(true)
+      setForthOpen(false)
       queueMicrotask(() => {
         document.getElementById('demo-composer')?.focus()
       })
@@ -366,9 +375,26 @@ export default function DemoWorkspace() {
 
   return (
     <div className="relative flex min-h-0 flex-1">
-      {!tourDismissed && (
+      <AnimatePresence mode="wait">
+        {!tourDismissed && (
         <aside className="pointer-events-none absolute inset-x-0 top-3 z-50 flex justify-center px-4 md:justify-end md:pr-6">
-          <div className="pointer-events-auto w-full max-w-md rounded-xl border border-line bg-panel/95 p-4 shadow-lg backdrop-blur">
+          <motion.div
+            key={tourStep}
+            initial={{
+              opacity: reduceMotion ? 1 : 0,
+              y: reduceMotion ? 0 : -motionTokens.distance.sm,
+            }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{
+              opacity: reduceMotion ? 1 : 0,
+              y: reduceMotion ? 0 : -motionTokens.distance.sm,
+            }}
+            transition={{
+              duration: reduceMotion ? 0.1 : motionTokens.duration.fast,
+              ease: motionTokens.easing.smooth,
+            }}
+            className="pointer-events-auto w-full max-w-md rounded-xl border border-line bg-panel/95 p-4 shadow-lg backdrop-blur"
+          >
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">
@@ -384,7 +410,6 @@ export default function DemoWorkspace() {
               <button
                 onClick={() => setTourDismissed(true)}
                 className="rounded-md border border-line px-2 py-1 text-[11px] text-muted hover:bg-raised hover:text-body"
-                
               >
                 Skip
               </button>
@@ -416,9 +441,10 @@ export default function DemoWorkspace() {
                 </button>
               )}
             </div>
-          </div>
+          </motion.div>
         </aside>
-      )}
+        )}
+      </AnimatePresence>
 
       <aside className="hidden w-72 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line bg-panel px-4 py-5 md:flex">
         <div className="flex items-center gap-2">
@@ -562,6 +588,15 @@ export default function DemoWorkspace() {
         </header>
 
         <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-2 md:hidden">
+          <button
+            onClick={() => {
+              setThreadId(null)
+              setForthOpen((v) => !v)
+            }}
+            className="shrink-0 rounded-md border border-pm-line bg-pm-soft px-3 py-1 text-xs font-medium text-pm"
+          >
+            {forthOpen ? 'Hide Forth' : 'Forth'}
+          </button>
           {CHANNELS.map((c) => (
             <button
               key={c.slug}

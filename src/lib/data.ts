@@ -10,6 +10,7 @@ import {
   isNotNull,
   isNull,
   like,
+  max,
   or,
   sql,
 } from 'drizzle-orm'
@@ -329,8 +330,37 @@ export async function postMessage(
 
 /** Newest message id in a scope — used by the SSE cursor. */
 export async function latestMessageId(scope: Scope, meId: string) {
-  const rows = await listMessages(scope, meId)
-  return rows.at(-1)?.id ?? 0
+  const db = getDb()
+
+  if (scope.kind === 'thread') {
+    const [row] = await db
+      .select({ id: max(messages.id) })
+      .from(messages)
+      .where(
+        or(eq(messages.id, scope.rootId), eq(messages.parentId, scope.rootId))
+      )
+    return row?.id ?? 0
+  }
+
+  if (scope.kind === 'channel') {
+    const [row] = await db
+      .select({ id: max(messages.id) })
+      .from(messages)
+      .innerJoin(channels, eq(messages.channelId, channels.id))
+      .where(and(eq(channels.slug, scope.slug), isNull(messages.parentId)))
+    return row?.id ?? 0
+  }
+
+  const [row] = await db
+    .select({ id: max(messages.id) })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.dmKey, dmKeyFor(meId, scope.otherUserId)),
+        isNull(messages.parentId)
+      )
+    )
+  return row?.id ?? 0
 }
 
 function previewText(body: string): string {
@@ -356,12 +386,18 @@ async function notifyForMessage(
     m[1].toLowerCase()
   )
   if (handles.length > 0) {
-    const all = await db.select({ id: users.id, handle: users.handle }).from(users)
-    const wanted = new Set(handles)
-    for (const u of all) {
-      if (wanted.has(u.handle.toLowerCase()) && u.id !== actorId) {
-        recipients.set(u.id, 'mention')
-      }
+    const wanted = [...new Set(handles)]
+    const matched = await db
+      .select({ id: users.id, handle: users.handle })
+      .from(users)
+      .where(
+        sql`lower(${users.handle}) in (${sql.join(
+          wanted.map((h) => sql`${h}`),
+          sql`, `
+        )})`
+      )
+    for (const u of matched) {
+      if (u.id !== actorId) recipients.set(u.id, 'mention')
     }
   }
 

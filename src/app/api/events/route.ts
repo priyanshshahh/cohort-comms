@@ -9,9 +9,9 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * Server-Sent Events for near-realtime chat. Polls the newest message id for
- * the scope and emits when it advances. Clients reconnect every ~25s (Vercel
- * function limit friendly) and fall back to SWR polling.
+ * Server-Sent Events for near-realtime chat. Polls max(message id) for the
+ * scope and emits when it advances. Clients reconnect every ~25s (Vercel
+ * function limit friendly); ChatView falls back to SWR only while offline.
  */
 export async function GET(request: NextRequest) {
   let meId: string
@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
 
       send({ type: 'hello', after: lastId })
       const started = Date.now()
+      let lastPing = 0
 
       try {
         while (Date.now() - started < 25_000) {
@@ -45,10 +46,11 @@ export async function GET(request: NextRequest) {
           if (newest > lastId) {
             lastId = newest
             send({ type: 'message', id: newest })
-          } else {
+          } else if (Date.now() - lastPing > 5_000) {
             send({ type: 'ping' })
+            lastPing = Date.now()
           }
-          await new Promise((r) => setTimeout(r, 500))
+          await new Promise((r) => setTimeout(r, 800))
         }
       } catch {
         send({ type: 'error' })

@@ -15,10 +15,10 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const [items, unread] = await Promise.all([
-    listNotifications(meId),
-    unreadNotificationCount(meId),
-  ])
+  const items = await listNotifications(meId)
+  const listedUnread = items.filter((i) => !i.readAt).length
+  const unread =
+    items.length < 30 ? listedUnread : await unreadNotificationCount(meId)
   return NextResponse.json({ items, unread })
 }
 

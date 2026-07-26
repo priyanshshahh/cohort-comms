@@ -1,5 +1,7 @@
 'use client'
 
+import { motion, useReducedMotion } from 'motion/react'
+import { motionTokens } from '@/lib/motionTokens'
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { extractForthLinks, normalizeForthUrl } from '@/lib/forth'
@@ -267,9 +269,10 @@ export default function ChatView({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const key = `/api/messages?scope=${encodeURIComponent(scope)}`
+  const reduceMotion = useReducedMotion()
   const { data, mutate } = useSWR<{ messages: ChatMessage[] }>(key, fetcher, {
-    // SSE drives freshness; keep a slow poll as safety net.
-    refreshInterval: live ? 8000 : 1500,
+    // SSE drives freshness; poll only while the stream is down.
+    refreshInterval: live ? 0 : 2000,
   })
 
   // SWR dedupes this with the sidebar's identical request.
@@ -519,8 +522,20 @@ export default function ChatView({
               Send
             </button>
           </div>
-          <p className="pt-1.5 text-[11px] text-muted">
-            {live ? 'Live' : 'Connecting…'} · @mention · Reply · Attach image · Forth links
+          <p className="flex items-center gap-1.5 pt-1.5 text-[11px] text-muted">
+            <motion.span
+              key={live ? 'live' : 'connecting'}
+              initial={{ opacity: reduceMotion ? 1 : 0 }}
+              animate={{ opacity: 1 }}
+              transition={{
+                duration: reduceMotion ? 0.1 : motionTokens.duration.fast,
+                ease: motionTokens.easing.sharp,
+              }}
+              className={live ? 'font-semibold text-emerald-500' : ''}
+            >
+              {live ? 'Live' : 'Connecting…'}
+            </motion.span>
+            <span>· @mention · Reply · Attach image · Forth links</span>
           </p>
         </form>
       )}
