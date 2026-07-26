@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
+import { getDb } from '@/db'
+import { sql } from 'drizzle-orm'
 import { postFromForth } from '@/lib/data'
 import { FORTH_BASE_URL } from '@/lib/forth'
 
@@ -39,6 +41,39 @@ export async function POST(request: NextRequest) {
   }
 
   const payload = await request.json().catch(() => null)
+
+  /**
+   * Replay protection. A delivery may legitimately be retried, but it must not
+   * post twice, and an intercepted payload must not stay replayable forever.
+   * `event_id` is a primary key, so the insert is the dedupe.
+   */
+  const eventId =
+    typeof payload?.id === 'string' ? payload.id.slice(0, 200) : null
+  if (eventId) {
+    const inserted = await getDb().execute(sql`
+      INSERT INTO webhook_events (event_id) VALUES (${eventId})
+      ON CONFLICT (event_id) DO NOTHING
+      RETURNING event_id
+    `)
+    const rows = Array.isArray(inserted)
+      ? inserted
+      : ((inserted as { rows?: unknown[] }).rows ?? [])
+    if (rows.length === 0) {
+      return NextResponse.json({ ok: true, duplicate: true }, { status: 200 })
+    }
+  }
+
+  // Reject stale payloads so a captured delivery cannot be replayed later.
+  if (typeof payload?.sentAt === 'string') {
+    const sent = Date.parse(payload.sentAt)
+    if (Number.isFinite(sent) && Math.abs(Date.now() - sent) > 5 * 60 * 1000) {
+      return NextResponse.json(
+        { error: 'payload timestamp outside the accepted window' },
+        { status: 400 }
+      )
+    }
+  }
+
   const ticket = payload?.ticket
   if (!ticket?.title) {
     return NextResponse.json(

@@ -11,6 +11,7 @@ import {
   isNull,
   like,
   or,
+  sql,
 } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { channels, messages, reactions, reads, users } from '@/db/schema'
@@ -459,41 +460,58 @@ export async function postFromForth(slug: string, body: string) {
  */
 export async function searchMessages(meId: string, query: string) {
   const db = getDb()
-  const term = `%${query.replace(/[%_]/g, (m) => `\\${m}`)}%`
 
-  const rows = await db
-    .select({
-      id: messages.id,
-      body: messages.body,
-      createdAt: messages.createdAt,
-      channelSlug: channels.slug,
-      dmKey: messages.dmKey,
-      authorName: users.name,
-      authorHandle: users.handle,
-    })
-    .from(messages)
-    .leftJoin(channels, eq(messages.channelId, channels.id))
-    .leftJoin(users, eq(messages.authorId, users.id))
-    .where(
-      and(
-        ilike(messages.body, term),
-        or(isNotNull(messages.channelId), like(messages.dmKey, `%${meId}%`))
-      )
-    )
-    .orderBy(desc(messages.id))
-    .limit(50)
+  /**
+   * Ranked full-text search over a generated `tsvector` column with a GIN
+   * index. `websearch_to_tsquery` parses user syntax ("quoted phrase", -minus)
+   * safely, so a stray operator cannot break or inject into the query, and
+   * `ts_rank` orders by relevance rather than recency alone. Replies are
+   * included; DMs are restricted to conversations the caller is part of.
+   */
+  const rows = await db.execute(sql`
+    SELECT m.id,
+           m.body,
+           m.created_at   AS "createdAt",
+           m.channel_id   AS "channelId",
+           m.dm_key       AS "dmKey",
+           m.parent_id    AS "parentId",
+           c.slug         AS "channelSlug",
+           u.name         AS "authorName",
+           u.handle       AS "authorHandle",
+           ts_rank(m.search_vector, q.query) AS rank
+    FROM messages m
+    CROSS JOIN websearch_to_tsquery('english', ${query}) AS q(query)
+    LEFT JOIN channels c ON c.id = m.channel_id
+    LEFT JOIN users u ON u.id = m.author_id
+    WHERE m.search_vector @@ q.query
+      AND (m.channel_id IS NOT NULL OR m.dm_key LIKE ${'%' + meId + '%'})
+    ORDER BY rank DESC, m.id DESC
+    LIMIT 50
+  `)
 
-  return rows.map((r) => ({
+  const list = (Array.isArray(rows) ? rows : (rows as { rows?: unknown[] }).rows ?? []) as Array<{
+    id: number
+    body: string
+    createdAt: string
+    dmKey: string | null
+    parentId: number | null
+    channelSlug: string | null
+    authorName: string | null
+    authorHandle: string | null
+  }>
+
+  return list.map((r) => ({
     id: r.id,
     body: r.body,
     createdAt: r.createdAt,
     authorName: r.authorName,
     authorHandle: r.authorHandle,
-    // Where to send the user when they click the result.
     href: r.channelSlug
       ? `/c/${r.channelSlug}`
       : `/dm/${(r.dmKey ?? '').split('~').find((id) => id !== meId) ?? ''}`,
-    label: r.channelSlug ? `#${r.channelSlug}` : 'Direct message',
+    label: r.channelSlug
+      ? `#${r.channelSlug}${r.parentId ? ' · thread' : ''}`
+      : 'Direct message',
   }))
 }
 
