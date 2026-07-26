@@ -1,65 +1,79 @@
-import Image from "next/image";
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { auth } from '@clerk/nextjs/server'
+import { FORTH_BASE_URL } from '@/lib/forth'
 
-export default function Home() {
+export const dynamic = 'force-dynamic'
+
+const FEATURES = [
+  {
+    title: 'Channels',
+    body: 'Cohort-wide rooms for announcements, project weeks, peer review, and help. Any member can open a new one.',
+  },
+  {
+    title: 'Direct messages',
+    body: 'One-to-one conversations with any enrolled participant, with presence dots and unread badges.',
+  },
+  {
+    title: 'Forth-aware',
+    body: 'Paste a link to the cohort board and it renders as a card, so a thread about a ticket carries the ticket.',
+  },
+]
+
+export default async function Landing() {
+  const { userId } = await auth()
+  if (userId) redirect('/c/general')
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-16">
+      <div>
+        <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">
+          Hult Cohort Developer Program · Summer Pilot 2026
+        </p>
+        <h1 className="pt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
+          Cohort Comms
+        </h1>
+        <p className="max-w-xl pt-4 text-lg text-slate-400">
+          The cohort&apos;s internal communications platform. Channels, direct
+          messages, and unread notifications, signed in with the same GitHub
+          account you use for the cohort repo and the Forth board.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link
+          href="/sign-up"
+          className="rounded-lg bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400"
+        >
+          Create your account
+        </Link>
+        <Link
+          href="/sign-in"
+          className="rounded-lg border border-slate-700 px-5 py-2.5 font-semibold text-slate-200 hover:bg-slate-800"
+        >
+          Sign in
+        </Link>
+        <a
+          href={FORTH_BASE_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 py-2.5 font-semibold text-amber-200 hover:bg-amber-500/20"
+        >
+          Forth board ↗
+        </a>
+      </div>
+
+      <ul className="grid gap-4 sm:grid-cols-3">
+        {FEATURES.map((feature) => (
+          <li
+            key={feature.title}
+            className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+            <h2 className="font-semibold">{feature.title}</h2>
+            <p className="pt-1.5 text-sm text-slate-400">{feature.body}</p>
+          </li>
+        ))}
+      </ul>
+    </main>
+  )
 }
