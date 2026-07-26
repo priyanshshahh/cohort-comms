@@ -1,0 +1,68 @@
+import { NextRequest } from 'next/server'
+import {
+  latestMessageId,
+  parseScope,
+  requireUserId,
+} from '@/lib/data'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+/**
+ * Server-Sent Events for near-realtime chat. Polls the newest message id for
+ * the scope and emits when it advances. Clients reconnect every ~25s (Vercel
+ * function limit friendly) and fall back to SWR polling.
+ */
+export async function GET(request: NextRequest) {
+  let meId: string
+  try {
+    meId = await requireUserId()
+  } catch {
+    return new Response('unauthorized', { status: 401 })
+  }
+
+  const scope = parseScope(request.nextUrl.searchParams.get('scope'))
+  if (!scope) {
+    return new Response('invalid scope', { status: 400 })
+  }
+
+  let lastId = Number(request.nextUrl.searchParams.get('after') ?? '0')
+  if (!Number.isFinite(lastId) || lastId < 0) lastId = 0
+
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (payload: unknown) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+      }
+
+      send({ type: 'hello', after: lastId })
+      const started = Date.now()
+
+      try {
+        while (Date.now() - started < 25_000) {
+          const newest = await latestMessageId(scope, meId)
+          if (newest > lastId) {
+            lastId = newest
+            send({ type: 'message', id: newest })
+          } else {
+            send({ type: 'ping' })
+          }
+          await new Promise((r) => setTimeout(r, 500))
+        }
+      } catch {
+        send({ type: 'error' })
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    },
+  })
+}

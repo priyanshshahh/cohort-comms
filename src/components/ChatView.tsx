@@ -9,6 +9,7 @@ type Reaction = { emoji: string; count: number; mine: boolean }
 type ChatMessage = {
   id: number
   body: string
+  attachmentUrl?: string | null
   createdAt: string
   authorId: string
   authorName: string | null
@@ -170,6 +171,14 @@ const MessageRow = memo(function MessageRow({
           </div>
           <MessageBody body={message.body} meHandle={meHandle} />
           <ForthCards body={message.body} />
+          {message.attachmentUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={message.attachmentUrl}
+              alt="Attachment"
+              className="mt-2 max-h-64 max-w-full rounded-lg border border-line"
+            />
+          )}
 
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {message.reactions?.map((reaction) => (
@@ -250,12 +259,17 @@ export default function ChatView({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [live, setLive] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const key = `/api/messages?scope=${encodeURIComponent(scope)}`
   const { data, mutate } = useSWR<{ messages: ChatMessage[] }>(key, fetcher, {
-    refreshInterval: 1000,
+    // SSE drives freshness; keep a slow poll as safety net.
+    refreshInterval: live ? 8000 : 1500,
   })
 
   // SWR dedupes this with the sidebar's identical request.
@@ -272,6 +286,39 @@ export default function ChatView({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
+
+  // Near-realtime via SSE; reconnect when the server closes the stream.
+  useEffect(() => {
+    let es: EventSource | null = null
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    function connect() {
+      if (cancelled) return
+      es = new EventSource(`/api/events?scope=${encodeURIComponent(scope)}`)
+      es.onopen = () => setLive(true)
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data)
+          if (payload.type === 'message') mutate()
+        } catch {
+          /* ignore malformed frames */
+        }
+      }
+      es.onerror = () => {
+        setLive(false)
+        es?.close()
+        timer = setTimeout(connect, 1200)
+      }
+    }
+    connect()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+      es?.close()
+      setLive(false)
+    }
+  }, [scope, mutate])
 
   const react = useCallback(async (messageId: number, emoji: string) => {
     await fetch('/api/reactions', {
@@ -311,20 +358,39 @@ export default function ChatView({
           )
           .slice(0, 6)
 
+  async function onPickFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch('/api/upload', { method: 'POST', body: form })
+    setUploading(false)
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}))
+      setError(payload.error ?? 'upload failed')
+      return
+    }
+    const payload = await res.json()
+    setAttachmentUrl(payload.url)
+  }
+
   async function send(event: React.FormEvent) {
     event.preventDefault()
     const body = draft.trim()
-    if (!body || sending) return
+    if ((!body && !attachmentUrl) || sending || uploading) return
 
     setSending(true)
     setError(null)
+    const pendingAttachment = attachmentUrl
     setDraft('')
+    setAttachmentUrl(null)
     setMentionQuery(null)
 
     const res = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scope, body }),
+      body: JSON.stringify({ scope, body, attachmentUrl: pendingAttachment }),
     })
     setSending(false)
 
@@ -332,6 +398,7 @@ export default function ChatView({
       const payload = await res.json().catch(() => ({}))
       setError(payload.error ?? 'could not send')
       setDraft(body)
+      setAttachmentUrl(pendingAttachment)
       return
     }
     mutate()
@@ -404,7 +471,37 @@ export default function ChatView({
               ))}
             </div>
           )}
+          {attachmentUrl && (
+            <div className="mb-2 flex items-center gap-2 rounded-lg border border-line bg-raised px-2 py-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={attachmentUrl} alt="" className="h-10 w-10 rounded object-cover" />
+              <span className="text-xs text-muted">Image attached</span>
+              <button
+                type="button"
+                onClick={() => setAttachmentUrl(null)}
+                className="ml-auto text-xs text-muted hover:text-body"
+              >
+                Remove
+              </button>
+            </div>
+          )}
           <div className="flex gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="rounded-lg border border-line px-3 py-2 text-sm text-muted hover:bg-raised hover:text-body disabled:opacity-40"
+              aria-label="Attach image"
+            >
+              {uploading ? '…' : '+'}
+            </button>
             <input
               ref={inputRef}
               value={draft}
@@ -416,14 +513,14 @@ export default function ChatView({
             />
             <button
               type="submit"
-              disabled={sending || !draft.trim()}
+              disabled={sending || uploading || (!draft.trim() && !attachmentUrl)}
               className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-40"
             >
               Send
             </button>
           </div>
           <p className="pt-1.5 text-[11px] text-muted">
-            @mention · Reply for threads · Paste a Forth link for a board card
+            {live ? 'Live' : 'Connecting…'} · @mention · Reply · Attach image · Forth links
           </p>
         </form>
       )}

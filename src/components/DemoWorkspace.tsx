@@ -700,8 +700,8 @@ export default function DemoWorkspace() {
               </button>
             </div>
             <p className="pt-1.5 text-[11px] text-muted">
-              Interactive demo — posts and reactions stay local. Paste a Forth
-              link to preview a board card.
+              Interactive demo — posts stay local. Paste a Forth link for a
+              board card. Signed-in workspace adds Live SSE, bell inbox, attach.
             </p>
           </form>
         )}

@@ -55,6 +55,8 @@ export const messages = pgTable(
      * each root carries its reply count.
      */
     parentId: integer('parent_id'),
+    /** Optional image/file URL (Blob or small data URL fallback). */
+    attachmentUrl: text('attachment_url'),
     editedAt: timestamp('edited_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
@@ -63,6 +65,27 @@ export const messages = pgTable(
     index('messages_dm_idx').on(t.dmKey, t.id),
     index('messages_parent_idx').on(t.parentId, t.id),
   ]
+)
+
+/**
+ * In-app alerts for @mentions, DM arrivals, and thread replies.
+ * Separate from `reads` (conversation unread) so the bell can surface
+ * actionable events without changing channel badges.
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: serial('id').primaryKey(),
+    userId: text('user_id').notNull(),
+    actorId: text('actor_id').notNull(),
+    kind: text('kind').notNull(),
+    messageId: integer('message_id').notNull(),
+    scope: text('scope').notNull(),
+    preview: text('preview').notNull(),
+    readAt: timestamp('read_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [index('notifications_user_idx').on(t.userId, t.id)]
 )
 
 /**

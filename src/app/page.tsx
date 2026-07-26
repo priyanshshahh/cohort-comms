@@ -12,7 +12,7 @@ const PILLARS = [
   },
   {
     title: 'Real cohort chat',
-    body: 'Channels, DMs, threads, @mentions, reactions, unread, presence, ⌘K search.',
+    body: 'SSE live updates, @mention inbox, image attach, threads, reactions, ⌘K.',
   },
   {
     title: 'Try in 60 seconds',
@@ -23,7 +23,7 @@ const PILLARS = [
 const PATH = [
   'Open the demo (no signup)',
   'Spot the WEBHOOK badge in #general',
-  'Reply in a thread · post a message · open Forth',
+  'Join workspace → Live badge, bell inbox, attach image',
 ]
 
 export default async function Landing() {

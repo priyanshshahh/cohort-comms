@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { UserButton } from '@clerk/nextjs'
 import ThemeToggle from './ThemeToggle'
+import NotificationBell from './NotificationBell'
 import dynamic from 'next/dynamic'
 
 // Modal-only surface: keep it out of the initial bundle (bundle-dynamic-imports).
@@ -167,6 +168,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </span>
         )}
         <div className="ml-auto flex items-center gap-2">
+          <NotificationBell />
           <ThemeToggle />
           <UserButton />
         </div>
@@ -182,6 +184,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             Cohort Comms
           </span>
           <div className="ml-auto flex items-center gap-2">
+            <NotificationBell />
             <ThemeToggle />
             <UserButton />
           </div>

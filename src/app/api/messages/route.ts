@@ -8,7 +8,7 @@ import {
   requireUserId,
 } from '@/lib/data'
 
-const MAX_BODY_LENGTH = 4000
+const MAX_BODY_LENGTH = 8000
 
 /** GET /api/messages?scope=channel:general — conversation history. */
 export async function GET(request: NextRequest) {
@@ -52,11 +52,13 @@ export async function POST(request: NextRequest) {
   const payload = await request.json().catch(() => null)
   const scope = parseScope(payload?.scope ?? null)
   const body = typeof payload?.body === 'string' ? payload.body.trim() : ''
+  const attachmentUrl =
+    typeof payload?.attachmentUrl === 'string' ? payload.attachmentUrl : null
 
   if (!scope) {
     return NextResponse.json({ error: 'invalid scope' }, { status: 400 })
   }
-  if (!body) {
+  if (!body && !attachmentUrl) {
     return NextResponse.json({ error: 'message is empty' }, { status: 400 })
   }
   if (body.length > MAX_BODY_LENGTH) {
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const row = await postMessage(scope, meId, body)
+    const row = await postMessage(scope, meId, body || ' ', attachmentUrl)
     if (row) await markRead(scope, meId, row.id)
     return NextResponse.json({ message: row }, { status: 201 })
   } catch (error) {

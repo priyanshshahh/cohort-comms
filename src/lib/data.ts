@@ -14,7 +14,7 @@ import {
   sql,
 } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { channels, messages, reactions, reads, users } from '@/db/schema'
+import { channels, messages, notifications, reactions, reads, users } from '@/db/schema'
 
 /** Channels every cohort member lands in, created on first boot. */
 export const DEFAULT_CHANNELS = [
@@ -171,6 +171,7 @@ export async function listMembers() {
 const MESSAGE_FIELDS = {
   id: messages.id,
   body: messages.body,
+  attachmentUrl: messages.attachmentUrl,
   createdAt: messages.createdAt,
   editedAt: messages.editedAt,
   parentId: messages.parentId,
@@ -245,8 +246,16 @@ async function withReplyCounts<T extends { id: number }>(rows: T[]) {
   return rows.map((r) => ({ ...r, replyCount: byParent.get(r.id) ?? 0 }))
 }
 
-export async function postMessage(scope: Scope, meId: string, body: string) {
+export async function postMessage(
+  scope: Scope,
+  meId: string,
+  body: string,
+  attachmentUrl?: string | null
+) {
   const db = getDb()
+  const attachment = attachmentUrl?.trim() || null
+
+  let row: typeof messages.$inferSelect | undefined
 
   if (scope.kind === 'thread') {
     // A reply inherits the root's conversation so it stays searchable and
@@ -263,7 +272,7 @@ export async function postMessage(scope: Scope, meId: string, body: string) {
       throw new Error('not a participant in this conversation')
     }
 
-    const [row] = await db
+    ;[row] = await db
       .insert(messages)
       .values({
         channelId: root.channelId,
@@ -271,12 +280,10 @@ export async function postMessage(scope: Scope, meId: string, body: string) {
         parentId: root.id,
         authorId: meId,
         body,
+        attachmentUrl: attachment,
       })
       .returning()
-    return row
-  }
-
-  if (scope.kind === 'channel') {
+  } else if (scope.kind === 'channel') {
     const [channel] = await db
       .select()
       .from(channels)
@@ -295,18 +302,162 @@ export async function postMessage(scope: Scope, meId: string, body: string) {
       }
     }
 
-    const [row] = await db
+    ;[row] = await db
       .insert(messages)
-      .values({ channelId: channel.id, authorId: meId, body })
+      .values({
+        channelId: channel.id,
+        authorId: meId,
+        body,
+        attachmentUrl: attachment,
+      })
       .returning()
-    return row
+  } else {
+    ;[row] = await db
+      .insert(messages)
+      .values({
+        dmKey: dmKeyFor(meId, scope.otherUserId),
+        authorId: meId,
+        body,
+        attachmentUrl: attachment,
+      })
+      .returning()
   }
 
-  const [row] = await db
-    .insert(messages)
-    .values({ dmKey: dmKeyFor(meId, scope.otherUserId), authorId: meId, body })
-    .returning()
+  if (row) await notifyForMessage(scope, meId, row.id, body)
   return row
+}
+
+/** Newest message id in a scope — used by the SSE cursor. */
+export async function latestMessageId(scope: Scope, meId: string) {
+  const rows = await listMessages(scope, meId)
+  return rows.at(-1)?.id ?? 0
+}
+
+function previewText(body: string): string {
+  const trimmed = body.replace(/\s+/g, ' ').trim()
+  return trimmed.length > 120 ? `${trimmed.slice(0, 117)}…` : trimmed || '(attachment)'
+}
+
+/**
+ * Fan out @mention / DM / thread-reply notifications after a successful post.
+ */
+async function notifyForMessage(
+  scope: Scope,
+  actorId: string,
+  messageId: number,
+  body: string
+) {
+  const db = getDb()
+  const preview = previewText(body)
+  const scopeStr = scopeKey(scope, actorId)
+  const recipients = new Map<string, string>()
+
+  const handles = [...body.matchAll(/@([a-zA-Z0-9_-]{2,39})/g)].map((m) =>
+    m[1].toLowerCase()
+  )
+  if (handles.length > 0) {
+    const all = await db.select({ id: users.id, handle: users.handle }).from(users)
+    const wanted = new Set(handles)
+    for (const u of all) {
+      if (wanted.has(u.handle.toLowerCase()) && u.id !== actorId) {
+        recipients.set(u.id, 'mention')
+      }
+    }
+  }
+
+  if (scope.kind === 'dm' && scope.otherUserId !== actorId) {
+    recipients.set(scope.otherUserId, recipients.get(scope.otherUserId) ?? 'dm')
+  }
+
+  if (scope.kind === 'thread') {
+    const [root] = await db
+      .select({ authorId: messages.authorId })
+      .from(messages)
+      .where(eq(messages.id, scope.rootId))
+      .limit(1)
+    if (root && root.authorId !== actorId) {
+      recipients.set(root.authorId, recipients.get(root.authorId) ?? 'reply')
+    }
+  }
+
+  if (recipients.size === 0) return
+
+  await db.insert(notifications).values(
+    [...recipients.entries()].map(([userId, kind]) => ({
+      userId,
+      actorId,
+      kind,
+      messageId,
+      scope: scopeStr,
+      preview,
+    }))
+  )
+}
+
+export async function listNotifications(meId: string, limit = 30) {
+  const db = getDb()
+  const rows = await db
+    .select({
+      id: notifications.id,
+      kind: notifications.kind,
+      messageId: notifications.messageId,
+      scope: notifications.scope,
+      preview: notifications.preview,
+      readAt: notifications.readAt,
+      createdAt: notifications.createdAt,
+      actorName: users.name,
+      actorHandle: users.handle,
+    })
+    .from(notifications)
+    .leftJoin(users, eq(notifications.actorId, users.id))
+    .where(eq(notifications.userId, meId))
+    .orderBy(desc(notifications.id))
+    .limit(limit)
+
+  return rows.map((r) => ({
+    ...r,
+    href: hrefForScope(r.scope, meId),
+  }))
+}
+
+function hrefForScope(scope: string, meId: string): string {
+  if (scope.startsWith('channel:')) return `/c/${scope.slice('channel:'.length)}`
+  if (scope.startsWith('dm:')) {
+    const key = scope.slice('dm:'.length)
+    const other = key.split('~').find((id) => id !== meId) ?? ''
+    return `/dm/${other}`
+  }
+  if (scope.startsWith('thread:')) {
+    // Threads open from the parent conversation; land on general as a safe default.
+    return '/c/general'
+  }
+  return '/c/general'
+}
+
+export async function unreadNotificationCount(meId: string) {
+  const db = getDb()
+  const [row] = await db
+    .select({ total: count() })
+    .from(notifications)
+    .where(and(eq(notifications.userId, meId), isNull(notifications.readAt)))
+  return Number(row?.total ?? 0)
+}
+
+export async function markNotificationsRead(meId: string, ids?: number[]) {
+  const db = getDb()
+  if (ids && ids.length > 0) {
+    await db
+      .update(notifications)
+      .set({ readAt: new Date() })
+      .where(
+        and(eq(notifications.userId, meId), inArray(notifications.id, ids))
+      )
+    return
+  }
+  await db
+    .update(notifications)
+    .set({ readAt: new Date() })
+    .where(and(eq(notifications.userId, meId), isNull(notifications.readAt)))
 }
 
 /**
