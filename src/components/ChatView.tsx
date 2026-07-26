@@ -243,19 +243,22 @@ export default function ChatView({
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const key = `/api/messages?scope=${encodeURIComponent(scope)}`
   const { data, mutate } = useSWR<{ messages: ChatMessage[] }>(key, fetcher, {
-    refreshInterval: 2000,
+    refreshInterval: 1000,
   })
 
   // SWR dedupes this with the sidebar's identical request.
-  const { data: me } = useSWR<{ me?: { handle?: string } }>(
-    '/api/bootstrap',
-    fetcher
-  )
-  const meHandle = me?.me?.handle
+  const { data: boot } = useSWR<{
+    me?: { handle?: string }
+    members?: { handle: string; name: string }[]
+  }>('/api/bootstrap', fetcher)
+  const meHandle = boot?.me?.handle
+  const roster = boot?.members ?? []
 
   const messages = data?.messages ?? []
 
@@ -273,6 +276,35 @@ export default function ChatView({
     mutate()
   }, [mutate])
 
+  function onDraftChange(value: string) {
+    setDraft(value)
+    const cursor = inputRef.current?.selectionStart ?? value.length
+    const before = value.slice(0, cursor)
+    const match = before.match(/@([a-zA-Z0-9_-]{0,39})$/)
+    setMentionQuery(match ? match[1].toLowerCase() : null)
+  }
+
+  function insertMention(handle: string) {
+    const cursor = inputRef.current?.selectionStart ?? draft.length
+    const before = draft.slice(0, cursor)
+    const after = draft.slice(cursor)
+    const replaced = before.replace(/@([a-zA-Z0-9_-]{0,39})$/, `@${handle} `)
+    setDraft(replaced + after)
+    setMentionQuery(null)
+    queueMicrotask(() => inputRef.current?.focus())
+  }
+
+  const mentionHits =
+    mentionQuery === null
+      ? []
+      : roster
+          .filter(
+            (m) =>
+              m.handle.toLowerCase().includes(mentionQuery) ||
+              m.name.toLowerCase().includes(mentionQuery)
+          )
+          .slice(0, 6)
+
   async function send(event: React.FormEvent) {
     event.preventDefault()
     const body = draft.trim()
@@ -281,6 +313,7 @@ export default function ChatView({
     setSending(true)
     setError(null)
     setDraft('')
+    setMentionQuery(null)
 
     const res = await fetch('/api/messages', {
       method: 'POST',
@@ -341,12 +374,35 @@ export default function ChatView({
           🔒 {readOnlyReason ?? 'This channel is read-only.'}
         </div>
       ) : (
-        <form onSubmit={send} className="border-t border-line px-5 py-3">
+        <form onSubmit={send} className="relative border-t border-line px-5 py-3">
           {error && <p className="pb-2 text-xs text-red-500">{error}</p>}
+          {mentionHits.length > 0 && (
+            <div
+              role="listbox"
+              aria-label="Mention suggestions"
+              className="absolute bottom-full left-5 right-5 z-20 mb-1 overflow-hidden rounded-lg border border-line bg-panel shadow-lg"
+            >
+              {mentionHits.map((member) => (
+                <button
+                  key={member.handle}
+                  type="button"
+                  role="option"
+                  onClick={() => insertMention(member.handle)}
+                  className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-sm last:border-0 hover:bg-raised"
+                >
+                  <span className="font-semibold text-accent">
+                    @{member.handle}
+                  </span>
+                  <span className="truncate text-muted">{member.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex gap-2">
             <input
+              ref={inputRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => onDraftChange(e.target.value)}
               placeholder={`Message ${title}…`}
               aria-label={`Message ${title}`}
               autoComplete="off"
@@ -361,7 +417,7 @@ export default function ChatView({
             </button>
           </div>
           <p className="pt-1.5 text-[11px] text-muted">
-            Paste a Forth link to attach the board item to this conversation.
+            @mention · Reply for threads · Paste a Forth link for a board card
           </p>
         </form>
       )}

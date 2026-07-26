@@ -5,6 +5,21 @@ import { FORTH_BASE_URL } from '@/lib/forth'
 
 export const dynamic = 'force-dynamic'
 
+const PILLARS = [
+  {
+    title: 'Forth, live',
+    body: 'Inbound ship webhook, deep-link cards, and the board embedded beside chat.',
+  },
+  {
+    title: 'Real cohort chat',
+    body: 'Channels, DMs, threads, @mentions, reactions, unread, presence, ⌘K search.',
+  },
+  {
+    title: 'Try in 30 seconds',
+    body: 'Interactive /demo — post, react, open threads — no account required.',
+  },
+]
+
 export default async function Landing() {
   const { userId } = await auth()
   if (userId) redirect('/c/general')
@@ -29,10 +44,10 @@ export default async function Landing() {
             Cohort Comms
           </h1>
           <p className="max-w-xl pt-5 text-lg leading-relaxed text-muted">
-            Chat that already talks to{' '}
-            <span className="text-pm">Forth</span> — live ship webhooks, board
-            cards, and the ticket board embedded beside every channel. Not a
-            second Discord. The cohort channel next to the cohort board.
+            The cohort channel next to the cohort board. Threads and @mentions
+            for async work — plus a live{' '}
+            <span className="text-pm">Forth</span> webhook so shipped tickets
+            post themselves into chat.
           </p>
         </div>
 
@@ -60,32 +75,14 @@ export default async function Landing() {
         </div>
 
         <dl className="grid max-w-3xl gap-6 border-t border-line pt-8 sm:grid-cols-3">
-          <div>
-            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Inbound webhook
-            </dt>
-            <dd className="pt-2 text-sm leading-relaxed">
-              When a Forth ticket ships, it posts itself into #general. Receiving
-              half is live today.
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Board beside chat
-            </dt>
-            <dd className="pt-2 text-sm leading-relaxed">
-              Split-pane Forth embed — move a ticket without losing the thread.
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
-              Cohort-ready
-            </dt>
-            <dd className="pt-2 text-sm leading-relaxed">
-              Channels, DMs, unread, presence, search, reactions — sized for the
-              enrolled cohort.
-            </dd>
-          </div>
+          {PILLARS.map((pillar) => (
+            <div key={pillar.title}>
+              <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+                {pillar.title}
+              </dt>
+              <dd className="pt-2 text-sm leading-relaxed">{pillar.body}</dd>
+            </div>
+          ))}
         </dl>
       </div>
     </main>
