@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { UserButton } from '@clerk/nextjs'
 import ThemeToggle from './ThemeToggle'
+import CommandPalette from './CommandPalette'
 import { FORTH_BASE_URL } from '@/lib/forth'
 
 type Channel = {
@@ -162,6 +163,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <UserButton />
           </div>
         </div>
+
+        <CommandPalette channels={channels} members={members} />
 
         {/* Global search */}
         <div className="relative" ref={searchBox}>

@@ -7,6 +7,10 @@ const isPublicRoute = createRouteMatcher([
   '/sign-up(.*)',
   // Reviewers evaluate the product without an account.
   '/demo',
+  // Crawler and agent metadata must stay reachable without a session.
+  '/robots.txt',
+  '/sitemap.xml',
+  '/llms.txt',
   // Inbound webhooks authenticate with their own shared secret, so they must
   // bypass Clerk's session check rather than being redirected to sign-in.
   '/api/webhooks(.*)',
