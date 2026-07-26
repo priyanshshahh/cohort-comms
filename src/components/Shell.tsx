@@ -6,7 +6,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { UserButton } from '@clerk/nextjs'
 import ThemeToggle from './ThemeToggle'
-import CommandPalette from './CommandPalette'
+import dynamic from 'next/dynamic'
+
+// Modal-only surface: keep it out of the initial bundle (bundle-dynamic-imports).
+const CommandPalette = dynamic(() => import('./CommandPalette'), { ssr: false })
 import { FORTH_BASE_URL } from '@/lib/forth'
 
 type Channel = {

@@ -11,8 +11,9 @@ export default async function AppLayout({
 }) {
   // Seed the default channels and register the viewer on first visit so a
   // brand-new cohort member lands in a populated workspace.
-  await ensureSeedChannels()
-  await syncCurrentUser()
+  // Independent writes — running them in parallel removes a round-trip from
+  // every authenticated page load (async-parallel).
+  await Promise.all([ensureSeedChannels(), syncCurrentUser()])
 
   return (
     <ClerkProvider>

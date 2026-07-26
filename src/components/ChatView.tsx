@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { extractForthLinks } from '@/lib/forth'
 
@@ -93,6 +93,119 @@ function ForthCards({ body }: { body: string }) {
   )
 }
 
+
+/**
+ * One message row. Memoised because the conversation re-polls every 2s: without
+ * this every row re-renders on each tick even when nothing about it changed
+ * (rerender-memo). Reference-stable callbacks keep the memo effective.
+ */
+const MessageRow = memo(function MessageRow({
+  message,
+  day,
+  showDay,
+  onReact,
+  onOpenThread,
+}: {
+  message: ChatMessage
+  day: string
+  showDay: boolean
+  onReact: (messageId: number, emoji: string) => void
+  onOpenThread?: (rootId: number) => void
+}) {
+  return (
+    <li>
+      {showDay && (
+        <div className="flex items-center gap-3 py-2">
+          <span className="h-px flex-1 bg-line" />
+          <span className="text-[11px] font-medium text-muted">{day}</span>
+          <span className="h-px flex-1 bg-line" />
+        </div>
+      )}
+      <div className="flex gap-3">
+        {message.authorAvatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={message.authorAvatar}
+            alt=""
+            width={32}
+            height={32}
+            loading="lazy"
+            className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
+          />
+        ) : (
+          <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-raised text-xs">
+            {(message.authorName ?? '?').slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2">
+            <span className="text-sm font-semibold">
+              {message.authorName ?? 'Unknown'}
+            </span>
+            <span className="tabular text-[11px] text-muted">
+              {formatTime(message.createdAt)}
+            </span>
+          </div>
+          <MessageBody body={message.body} />
+          <ForthCards body={message.body} />
+
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {message.reactions?.map((reaction) => (
+              <button
+                key={reaction.emoji}
+                onClick={() => onReact(message.id, reaction.emoji)}
+                aria-label={`${reaction.mine ? 'Remove' : 'Add'} ${reaction.emoji} reaction`}
+                aria-pressed={reaction.mine}
+                className={`rounded-full border px-2 py-0.5 text-xs ${
+                  reaction.mine
+                    ? 'border-accent bg-accent-soft'
+                    : 'border-line hover:bg-raised'
+                }`}
+              >
+                <span className="tabular">
+                  {reaction.emoji} {reaction.count}
+                </span>
+              </button>
+            ))}
+            {onOpenThread && !message.parentId && (
+              <button
+                onClick={() => onOpenThread(message.id)}
+                className="rounded-full border border-line px-2 py-0.5 text-xs text-muted hover:bg-raised hover:text-body"
+              >
+                {message.replyCount
+                  ? `${message.replyCount} ${
+                      message.replyCount === 1 ? 'reply' : 'replies'
+                    }`
+                  : 'Reply'}
+              </button>
+            )}
+            <div className="group relative">
+              <button
+                aria-label="Add reaction"
+                className="rounded-full border border-line px-2 py-0.5 text-xs text-muted opacity-0 transition hover:bg-raised focus:opacity-100 group-hover:opacity-100"
+              >
+                +
+              </button>
+              <div className="absolute bottom-full left-0 z-10 mb-1 hidden gap-0.5 rounded-lg border border-line bg-panel p-1 shadow-lg group-focus-within:flex group-hover:flex">
+                {EMOJI.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => onReact(message.id, emoji)}
+                    aria-label={`React with ${emoji}`}
+                    className="rounded px-1.5 py-0.5 text-sm hover:bg-raised focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </li>
+  )
+})
+
 export default function ChatView({
   scope,
   title,
@@ -128,14 +241,14 @@ export default function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  async function react(messageId: number, emoji: string) {
+  const react = useCallback(async (messageId: number, emoji: string) => {
     await fetch('/api/reactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messageId, emoji }),
     })
     mutate()
-  }
+  }, [mutate])
 
   async function send(event: React.FormEvent) {
     event.preventDefault()
@@ -185,98 +298,14 @@ export default function ChatView({
             const showDay = day !== lastDay
             lastDay = day
             return (
-              <li key={message.id}>
-                {showDay && (
-                  <div className="flex items-center gap-3 py-2">
-                    <span className="h-px flex-1 bg-line" />
-                    <span className="text-[11px] font-medium text-muted">
-                      {day}
-                    </span>
-                    <span className="h-px flex-1 bg-line" />
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  {message.authorAvatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={message.authorAvatar}
-                      alt=""
-                      width={32}
-                      height={32}
-                      loading="lazy"
-                      className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
-                    />
-                  ) : (
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-raised text-xs">
-                      {(message.authorName ?? '?').slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold">
-                        {message.authorName ?? 'Unknown'}
-                      </span>
-                      <span className="text-[11px] text-muted">
-                        {formatTime(message.createdAt)}
-                      </span>
-                    </div>
-                    <MessageBody body={message.body} />
-                    <ForthCards body={message.body} />
-
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      {message.reactions?.map((reaction) => (
-                        <button
-                          key={reaction.emoji}
-                          onClick={() => react(message.id, reaction.emoji)}
-                          aria-label={`${reaction.mine ? 'Remove' : 'Add'} ${reaction.emoji} reaction`}
-                          aria-pressed={reaction.mine}
-                          className={`rounded-full border px-2 py-0.5 text-xs ${
-                            reaction.mine
-                              ? 'border-accent bg-accent-soft'
-                              : 'border-line hover:bg-raised'
-                          }`}
-                        >
-                          <span className="tabular">
-                            {reaction.emoji} {reaction.count}
-                          </span>
-                        </button>
-                      ))}
-                      {onOpenThread && !message.parentId && (
-                        <button
-                          onClick={() => onOpenThread(message.id)}
-                          className="rounded-full border border-line px-2 py-0.5 text-xs text-muted hover:bg-raised hover:text-body"
-                        >
-                          {message.replyCount
-                            ? `${message.replyCount} ${
-                                message.replyCount === 1 ? 'reply' : 'replies'
-                              }`
-                            : 'Reply'}
-                        </button>
-                      )}
-                      <div className="group relative">
-                        <button
-                          aria-label="Add reaction"
-                          className="rounded-full border border-line px-2 py-0.5 text-xs text-muted opacity-0 transition hover:bg-raised focus:opacity-100 group-hover:opacity-100"
-                        >
-                          ☺+
-                        </button>
-                        <div className="absolute bottom-full left-0 z-10 mb-1 hidden gap-0.5 rounded-lg border border-line bg-panel p-1 shadow-lg group-focus-within:flex group-hover:flex">
-                          {EMOJI.map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => react(message.id, emoji)}
-                              aria-label={`React with ${emoji}`}
-                              className="rounded px-1.5 py-0.5 text-sm hover:bg-raised focus-visible:ring-2 focus-visible:ring-accent"
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </li>
+              <MessageRow
+                key={message.id}
+                message={message}
+                day={day}
+                showDay={showDay}
+                onReact={react}
+                onOpenThread={onOpenThread}
+              />
             )
           })}
         </ul>
