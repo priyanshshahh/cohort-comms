@@ -41,13 +41,27 @@ function formatDay(iso: string): string {
     : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-/** Render message text with bare URLs turned into links. */
-function MessageBody({ body }: { body: string }) {
-  const parts = body.split(/(https?:\/\/[^\s<>()]+)/g)
+/**
+ * Render message text with bare URLs linked and @handles rendered as chips.
+ * A mention of the viewer is tinted so it is findable while scrolling.
+ */
+function MessageBody({ body, meHandle }: { body: string; meHandle?: string }) {
+  const parts = body.split(/(https?:\/\/[^\s<>()]+|@[a-zA-Z0-9_-]{2,39})/g)
   return (
     <p className="whitespace-pre-wrap break-words text-sm">
       {parts.map((part, i) =>
-        /^https?:\/\//.test(part) ? (
+        part.startsWith('@') ? (
+          <span
+            key={i}
+            className={`rounded px-1 font-medium ${
+              meHandle && part.slice(1).toLowerCase() === meHandle.toLowerCase()
+                ? 'bg-accent text-on-accent'
+                : 'text-accent'
+            }`}
+          >
+            {part}
+          </span>
+        ) : /^https?:\/\//.test(part) ? (
           <a
             key={i}
             href={part}
@@ -105,10 +119,12 @@ const MessageRow = memo(function MessageRow({
   showDay,
   onReact,
   onOpenThread,
+  meHandle,
 }: {
   message: ChatMessage
   day: string
   showDay: boolean
+  meHandle?: string
   onReact: (messageId: number, emoji: string) => void
   onOpenThread?: (rootId: number) => void
 }) {
@@ -146,7 +162,7 @@ const MessageRow = memo(function MessageRow({
               {formatTime(message.createdAt)}
             </span>
           </div>
-          <MessageBody body={message.body} />
+          <MessageBody body={message.body} meHandle={meHandle} />
           <ForthCards body={message.body} />
 
           <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -234,6 +250,13 @@ export default function ChatView({
     refreshInterval: 2000,
   })
 
+  // SWR dedupes this with the sidebar's identical request.
+  const { data: me } = useSWR<{ me?: { handle?: string } }>(
+    '/api/bootstrap',
+    fetcher
+  )
+  const meHandle = me?.me?.handle
+
   const messages = data?.messages ?? []
 
   // Follow the conversation as it grows.
@@ -305,6 +328,7 @@ export default function ChatView({
                 showDay={showDay}
                 onReact={react}
                 onOpenThread={onOpenThread}
+                meHandle={meHandle}
               />
             )
           })}
