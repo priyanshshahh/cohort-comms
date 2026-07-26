@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
-import { extractForthLinks } from '@/lib/forth'
+import { extractForthLinks, normalizeForthUrl } from '@/lib/forth'
 
 type Reaction = { emoji: string; count: number; mine: boolean }
 
@@ -41,9 +41,9 @@ function formatDay(iso: string): string {
     : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-/**
- * Render message text with bare URLs linked and @handles rendered as chips.
+/** Render message text with bare URLs linked and @handles rendered as chips.
  * A mention of the viewer is tinted so it is findable while scrolling.
+ * Forth view paths are rewritten to the live SPA root (Forth has no /board route).
  */
 function MessageBody({ body, meHandle }: { body: string; meHandle?: string }) {
   const parts = body.split(/(https?:\/\/[^\s<>()]+|@[a-zA-Z0-9_-]{2,39})/g)
@@ -62,15 +62,21 @@ function MessageBody({ body, meHandle }: { body: string; meHandle?: string }) {
             {part}
           </span>
         ) : /^https?:\/\//.test(part) ? (
-          <a
-            key={i}
-            href={part}
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent underline decoration-accent/40"
-          >
-            {part}
-          </a>
+          (() => {
+            const forth = normalizeForthUrl(part.replace(/[.,;:]+$/, ''))
+            const href = forth?.url ?? part
+            return (
+              <a
+                key={i}
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-accent underline decoration-accent/40"
+              >
+                {part}
+              </a>
+            )
+          })()
         ) : (
           <span key={i}>{part}</span>
         )

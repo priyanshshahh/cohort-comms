@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { getDb } from '@/db'
 import { sql } from 'drizzle-orm'
 import { postFromForth } from '@/lib/data'
-import { FORTH_BASE_URL } from '@/lib/forth'
+import { normalizeForthUrl } from '@/lib/forth'
 
 /**
  * Inbound webhook for Forth board events.
@@ -83,15 +83,12 @@ export async function POST(request: NextRequest) {
   }
 
   // Only accept links that actually point at Forth, so the webhook cannot be
-  // used to inject arbitrary URLs into the cohort's channels.
+  // used to inject arbitrary URLs into the cohort's channels. Normalize view
+  // paths (`/board`) to the live SPA root — Forth has no server routes there.
   let link = ''
   if (typeof ticket.url === 'string') {
-    try {
-      const parsed = new URL(ticket.url)
-      if (parsed.origin === new URL(FORTH_BASE_URL).origin) link = parsed.href
-    } catch {
-      // Ignore an unparseable URL rather than failing the delivery.
-    }
+    const normalized = normalizeForthUrl(ticket.url)
+    if (normalized) link = normalized.url
   }
 
   const status = String(ticket.status ?? '').trim()

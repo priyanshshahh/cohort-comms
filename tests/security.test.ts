@@ -13,6 +13,15 @@ describe('Forth link handling', () => {
     const links = extractForthLinks(`See ${FORTH_BASE_URL}/chronicle`)
     expect(links).toHaveLength(1)
     expect(links[0].label).toContain('Chronicle')
+    // Forth is a SPA — only `/` is live; view paths are rewritten.
+    expect(links[0].url).toBe(`${FORTH_BASE_URL}/#chronicle`)
+  })
+
+  it('rewrites /board (404 on Forth) to the live root with a hash hint', () => {
+    const links = extractForthLinks(`${FORTH_BASE_URL}/board`)
+    expect(links).toHaveLength(1)
+    expect(links[0].label).toContain('Realm Map')
+    expect(links[0].url).toBe(`${FORTH_BASE_URL}/#board`)
   })
 
   it('refuses to card a lookalike domain', () => {

@@ -5,6 +5,11 @@
  *
  * Forth exposes no public REST API or webhooks, so the integration is
  * link-level plus shared GitHub identity rather than server-to-server.
+ *
+ * Important: Forth is a single-route SPA (`/`). Client views (board, today,
+ * proof, settings) are React state — paths like `/board` return 404 on the
+ * host. Deep-link cards therefore open the live root and label the intended
+ * view so members land somewhere that works.
  */
 export const FORTH_BASE_URL = 'https://forth-bice.vercel.app'
 export const FORTH_REPO_URL = 'https://github.com/CodingWCal/forth'
@@ -17,14 +22,44 @@ export type ForthLink = {
   label: string
 }
 
-/** Human labels for Forth's named views, so a card says what it points at. */
+/**
+ * Human labels for Forth's in-app views. Keys match path segments people
+ * paste (or that we seed in demos); the live app does not route them.
+ */
 const VIEW_LABELS: Record<string, string> = {
   '': 'Forth',
   today: 'Quest Log (Today)',
   board: 'Realm Map (Board)',
   chronicle: 'Chronicle (Proof ledger)',
+  proof: 'Chronicle (Proof ledger)',
   guild: 'Guild Hall',
   hall: 'Guild Hall',
+  settings: 'Guild Hall',
+}
+
+/**
+ * Forth only serves `/`. Rewrite view-ish paths to the working origin, keep a
+ * hash hint (`#board`) for humans / future hash routing, and preserve label.
+ */
+export function normalizeForthUrl(raw: string): ForthLink | null {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return null
+  }
+  if (parsed.host !== FORTH_HOST) return null
+
+  const segment = parsed.pathname.split('/').filter(Boolean)[0] ?? ''
+  const label = VIEW_LABELS[segment] ?? (segment ? `Forth · ${segment}` : 'Forth')
+
+  // Always open the live app root — `/board` etc. are 404 on production Forth.
+  const url =
+    segment && segment in VIEW_LABELS && segment !== ''
+      ? `${FORTH_BASE_URL}/#${segment}`
+      : `${FORTH_BASE_URL}/`
+
+  return { url, label }
 }
 
 /**
@@ -37,21 +72,11 @@ export function extractForthLinks(body: string): ForthLink[] {
 
   for (const match of body.matchAll(/https?:\/\/[^\s<>()]+/g)) {
     const raw = match[0].replace(/[.,;:]+$/, '')
-    let parsed: URL
-    try {
-      parsed = new URL(raw)
-    } catch {
-      continue
-    }
-    if (parsed.host !== FORTH_HOST) continue
-    if (seen.has(parsed.href)) continue
-    seen.add(parsed.href)
-
-    const segment = parsed.pathname.split('/').filter(Boolean)[0] ?? ''
-    found.push({
-      url: parsed.href,
-      label: VIEW_LABELS[segment] ?? `Forth · ${segment}`,
-    })
+    const link = normalizeForthUrl(raw)
+    if (!link) continue
+    if (seen.has(link.url + link.label)) continue
+    seen.add(link.url + link.label)
+    found.push(link)
   }
 
   return found
