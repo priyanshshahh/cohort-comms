@@ -5,6 +5,8 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  // Reviewers evaluate the product without an account.
+  '/demo',
   // Inbound webhooks authenticate with their own shared secret, so they must
   // bypass Clerk's session check rather than being redirected to sign-in.
   '/api/webhooks(.*)',

@@ -42,8 +42,14 @@ export default async function Landing() {
 
       <div className="flex flex-wrap gap-3">
         <Link
-          href="/sign-up"
+          href="/demo"
           className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white hover:brightness-110"
+        >
+          View live demo — no signup
+        </Link>
+        <Link
+          href="/sign-up"
+          className="rounded-lg border border-line px-5 py-2.5 font-semibold text-body hover:bg-raised"
         >
           Create your account
         </Link>
