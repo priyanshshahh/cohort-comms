@@ -17,6 +17,8 @@ type DemoMessage = {
   body: string
   reactions?: { emoji: string; count: number; mine?: boolean }[]
   bot?: boolean
+  /** Threaded replies. Kept on the root so the channel stays uncluttered. */
+  replies?: DemoMessage[]
 }
 
 type Scope =
@@ -227,6 +229,8 @@ export default function DemoWorkspace() {
   const [tourDismissed, setTourDismissed] = useState(false)
   const [nextId, setNextId] = useState(1000)
   const [flashId, setFlashId] = useState<number | null>(null)
+  const [threadId, setThreadId] = useState<number | null>(null)
+  const [threadDraft, setThreadDraft] = useState('')
 
   const key = scopeKey(scope)
   const messages = conversations[key] ?? []
@@ -448,7 +452,10 @@ export default function DemoWorkspace() {
         </div>
 
         <button
-          onClick={() => setForthOpen((v) => !v)}
+          onClick={() => {
+            setThreadId(null)
+            setForthOpen((v) => !v)
+          }}
           className="rounded-lg border border-pm-line bg-pm-soft px-3 py-2 text-left text-sm font-medium text-pm hover:brightness-110"
         >
           {forthOpen ? 'Hide' : 'Open'} Forth board
@@ -594,6 +601,19 @@ export default function DemoWorkspace() {
                   </p>
                   <ForthCards body={message.body} />
                   <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setForthOpen(false)
+                        setThreadId(message.id)
+                      }}
+                      className="order-last rounded-full border border-line px-2 py-0.5 text-xs text-muted hover:bg-raised hover:text-body"
+                    >
+                      {message.replies?.length
+                        ? `${message.replies.length} ${
+                            message.replies.length === 1 ? 'reply' : 'replies'
+                          }`
+                        : 'Reply'}
+                    </button>
                     {(message.reactions ?? []).map((r) => (
                       <button
                         key={r.emoji}
@@ -663,7 +683,100 @@ export default function DemoWorkspace() {
         )}
       </main>
 
-      {forthOpen && (
+      {threadId !== null && (
+        <aside className="fixed inset-0 z-40 flex flex-col overscroll-contain border-l border-line bg-app lg:static lg:z-0 lg:w-[360px] lg:shrink-0">
+          <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+            <span className="text-sm font-semibold">Thread</span>
+            <span className="text-xs text-muted">Replies stay out of the channel</span>
+            <button
+              onClick={() => setThreadId(null)}
+              className="ml-auto rounded-md border border-line px-2 py-1 text-xs text-muted hover:bg-raised hover:text-body"
+            >
+              Close
+            </button>
+          </header>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {(() => {
+              const root = messages.find((m) => m.id === threadId)
+              if (!root) return null
+              return (
+                <ul className="flex flex-col gap-3">
+                  {[root, ...(root.replies ?? [])].map((m, i) => (
+                    <li key={m.id} className="flex gap-2.5">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-raised text-[11px] font-semibold">
+                        {m.initial}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-semibold">{m.author}</span>
+                          <span className="tabular text-[11px] text-muted">{m.time}</span>
+                          {i === 0 && (
+                            <span className="rounded bg-raised px-1.5 py-0.5 text-[10px] uppercase text-muted">
+                              root
+                            </span>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap break-words text-sm">{m.body}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )
+            })()}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const body = threadDraft.trim()
+              if (!body || threadId === null) return
+              updateMessages(key, (list) =>
+                list.map((m) =>
+                  m.id === threadId
+                    ? {
+                        ...m,
+                        replies: [
+                          ...(m.replies ?? []),
+                          {
+                            id: nextId,
+                            author: 'You',
+                            initial: 'Y',
+                            time: nowLabel(),
+                            body,
+                          },
+                        ],
+                      }
+                    : m
+                )
+              )
+              setNextId((n) => n + 1)
+              setThreadDraft('')
+            }}
+            className="border-t border-line px-4 py-3"
+          >
+            <div className="flex gap-2">
+              <input
+                value={threadDraft}
+                onChange={(e) => setThreadDraft(e.target.value)}
+                placeholder="Reply in thread…"
+                aria-label="Reply in thread"
+                autoComplete="off"
+                className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              />
+              <button
+                type="submit"
+                disabled={!threadDraft.trim()}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent disabled:opacity-40"
+              >
+                Send
+              </button>
+            </div>
+          </form>
+        </aside>
+      )}
+
+      {forthOpen && threadId === null && (
         <section className="fixed inset-0 z-40 flex flex-col overscroll-contain border-l border-line bg-app xl:static xl:z-0 xl:w-[38%] xl:max-w-xl">
           <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="text-sm font-semibold text-pm">Forth board</span>
