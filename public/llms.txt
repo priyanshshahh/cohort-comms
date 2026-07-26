@@ -1,0 +1,39 @@
+# Cohort Comms
+
+> Internal communications platform for the Hult Cohort Developer Program
+> (Summer Pilot 2026, Project 2). Replaces Discord: channels, direct messages,
+> global search, emoji reactions, admin-only announcements, unread badges,
+> presence, and light/dark themes — with the Forth project board embedded in
+> the app and a live inbound webhook from Forth.
+
+- Production: https://cohort-comms-phi.vercel.app
+- Demo (no signup): https://cohort-comms-phi.vercel.app/demo
+- Source: https://github.com/priyanshshahh/cohort-comms
+- Author: @priyanshshahh
+
+## Stack
+
+Next.js 16 (App Router), Clerk authentication, Neon Postgres via Drizzle ORM,
+deployed on Vercel. Message delivery is short-interval SWR polling (2s in a
+conversation, 5s for the sidebar) rather than WebSockets.
+
+## Project management integration (Forth)
+
+Forth (https://forth-bice.vercel.app) publishes no public REST API and no
+outbound webhooks, so integration works at four levels:
+
+- Inbound webhook: `POST /api/webhooks/forth`, authenticated by a shared secret
+  compared in constant time. Board events post into a channel as a `Forth` bot.
+  Only same-origin Forth URLs are rendered; other links are stripped.
+- Embedded board: a split-pane renders the live Forth board inside the app.
+- Deep-link cards: pasted Forth URLs render as labelled cards.
+- Shared identity: both tools authenticate with Google and GitHub OAuth.
+
+## Routes
+
+- `/` — landing page (public)
+- `/demo` — read-only product walkthrough, no account required (public)
+- `/sign-in`, `/sign-up` — Clerk authentication (public)
+- `/c/[slug]` — channel conversation (requires sign-in)
+- `/dm/[userId]` — direct message (requires sign-in)
+- `/api/webhooks/forth` — inbound board events (shared-secret auth)
