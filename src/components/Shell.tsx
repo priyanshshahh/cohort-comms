@@ -64,7 +64,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [forthOpen, setForthOpen] = useState(false)
+  // Open by default so reviewers see the Forth split-pane immediately.
+  const [forthOpen, setForthOpen] = useState(true)
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
   const searchBox = useRef<HTMLDivElement>(null)

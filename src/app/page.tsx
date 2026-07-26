@@ -5,81 +5,89 @@ import { FORTH_BASE_URL } from '@/lib/forth'
 
 export const dynamic = 'force-dynamic'
 
-const FEATURES = [
-  {
-    title: 'Channels',
-    body: 'Cohort-wide rooms for announcements, project weeks, peer review, and help. Any member can open a new one.',
-  },
-  {
-    title: 'Direct messages',
-    body: 'One-to-one conversations with any enrolled participant, with presence dots and unread badges.',
-  },
-  {
-    title: 'Forth-aware',
-    body: 'Paste a link to the cohort board and it renders as a card, so a thread about a ticket carries the ticket.',
-  },
-]
-
 export default async function Landing() {
   const { userId } = await auth()
   if (userId) redirect('/c/general')
 
   return (
-    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-16">
-      <div>
-        <p className="text-sm font-medium uppercase tracking-wider text-accent">
-          Hult Cohort Developer Program · Summer Pilot 2026
-        </p>
-        <h1 className="pt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
-          Cohort Comms
-        </h1>
-        <p className="max-w-xl pt-4 text-lg text-muted">
-          The cohort&apos;s internal communications platform. Channels, direct
-          messages, and unread notifications, signed in with the same GitHub
-          account you use for the cohort repo and the Forth board.
-        </p>
-      </div>
+    <main className="relative flex min-h-dvh flex-1 flex-col overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(13,148,136,0.18),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(245,158,11,0.12),transparent_50%),linear-gradient(180deg,var(--app),var(--panel))]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:linear-gradient(var(--line)_1px,transparent_1px),linear-gradient(90deg,var(--line)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]"
+      />
 
-      <div className="flex flex-wrap gap-3">
-        <Link
-          href="/demo"
-          className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white hover:brightness-110"
-        >
-          View live demo — no signup
-        </Link>
-        <Link
-          href="/sign-up"
-          className="rounded-lg border border-line px-5 py-2.5 font-semibold text-body hover:bg-raised"
-        >
-          Create your account
-        </Link>
-        <Link
-          href="/sign-in"
-          className="rounded-lg border border-line px-5 py-2.5 font-semibold text-body hover:bg-raised"
-        >
-          Sign in
-        </Link>
-        <a
-          href={FORTH_BASE_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-pm-line bg-pm-soft px-5 py-2.5 font-semibold text-pm hover:brightness-110"
-        >
-          Forth board ↗
-        </a>
-      </div>
+      <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10 px-6 py-16">
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">
+            Hult Cohort · Summer Pilot 2026 · Week 2
+          </p>
+          <h1 className="pt-4 font-display text-5xl font-semibold tracking-tight sm:text-6xl">
+            Cohort Comms
+          </h1>
+          <p className="max-w-xl pt-5 text-lg leading-relaxed text-muted">
+            Chat that already talks to{' '}
+            <span className="text-pm">Forth</span> — live ship webhooks, board
+            cards, and the ticket board embedded beside every channel. Not a
+            second Discord. The cohort channel next to the cohort board.
+          </p>
+        </div>
 
-      <ul className="grid gap-4 sm:grid-cols-3">
-        {FEATURES.map((feature) => (
-          <li
-            key={feature.title}
-            className="rounded-xl border border-line bg-panel p-4"
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/demo"
+            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white hover:brightness-110"
           >
-            <h2 className="font-semibold">{feature.title}</h2>
-            <p className="pt-1.5 text-sm text-muted">{feature.body}</p>
-          </li>
-        ))}
-      </ul>
+            Open live demo — no signup
+          </Link>
+          <Link
+            href="/sign-up"
+            className="rounded-lg border border-line bg-panel/80 px-5 py-3 text-sm font-semibold backdrop-blur hover:bg-raised"
+          >
+            Join the workspace
+          </Link>
+          <a
+            href={FORTH_BASE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-medium text-pm underline decoration-pm/40 underline-offset-4 hover:decoration-pm"
+          >
+            Forth board ↗
+          </a>
+        </div>
+
+        <dl className="grid max-w-3xl gap-6 border-t border-line pt-8 sm:grid-cols-3">
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Inbound webhook
+            </dt>
+            <dd className="pt-2 text-sm leading-relaxed">
+              When a Forth ticket ships, it posts itself into #general. Receiving
+              half is live today.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Board beside chat
+            </dt>
+            <dd className="pt-2 text-sm leading-relaxed">
+              Split-pane Forth embed — move a ticket without losing the thread.
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Cohort-ready
+            </dt>
+            <dd className="pt-2 text-sm leading-relaxed">
+              Channels, DMs, unread, presence, search, reactions — sized for the
+              enrolled cohort.
+            </dd>
+          </div>
+        </dl>
+      </div>
     </main>
   )
 }

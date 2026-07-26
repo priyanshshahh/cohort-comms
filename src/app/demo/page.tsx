@@ -4,23 +4,22 @@ import DemoWorkspace from '@/components/DemoWorkspace'
 export const metadata = {
   title: 'Cohort Comms — live demo',
   description:
-    'A no-signup walkthrough of Cohort Comms: channels, DMs, search, reactions, and the embedded Forth board.',
+    'Interactive no-signup demo: post, react, open DMs, and tour the Forth webhook + embedded board.',
 }
 
 /**
- * Public, read-only walkthrough. Reviewers land here from the submission PR
- * and can evaluate the whole product without creating an account.
+ * Public interactive walkthrough. Local-only state — reviewers evaluate the
+ * product without an account and without writing to the live cohort DB.
  */
 export default function DemoPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-app text-body">
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-5 py-3">
-        <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">
-          DEMO
+        <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">
+          LIVE DEMO
         </span>
         <p className="text-sm text-muted">
-          Read-only tour — no account needed. Everything below is the real UI
-          with sample data.
+          Interactive — post, react, open DMs. Nothing is saved to production.
         </p>
         <div className="ml-auto flex items-center gap-2">
           <Link

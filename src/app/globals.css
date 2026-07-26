@@ -4,38 +4,35 @@
    script in the root layout, so there is no flash of the wrong theme. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Semantic tokens. Components reference these (bg-app, text-body, …) so a
-   single palette swap re-themes the whole product. */
+/* Teal signal + amber Forth — not the default indigo SaaS palette. */
 :root {
-  /* Tells the browser to render native scrollbars, inputs and form controls
-     in the matching scheme. Without this, dark mode gets light scrollbars. */
   color-scheme: light;
-  --app: #ffffff;
-  --panel: #f8fafc;
-  --raised: #f1f5f9;
-  --line: #e2e8f0;
-  --body: #0f172a;
-  --muted: #64748b;
-  --accent: #4f46e5;
-  --accent-soft: #eef2ff;
+  --app: #f4f7f6;
+  --panel: #ffffff;
+  --raised: #e8efed;
+  --line: #d0dbd7;
+  --body: #10221f;
+  --muted: #5b716c;
+  --accent: #0f766e;
+  --accent-soft: #ccfbf1;
   --pm: #b45309;
-  --pm-soft: #fffbeb;
-  --pm-line: #fcd34d;
+  --pm-soft: #fff7ed;
+  --pm-line: #fdba74;
 }
 
 .dark {
   color-scheme: dark;
-  --app: #020617;
-  --panel: #0b1220;
-  --raised: #1e293b;
-  --line: #1e293b;
-  --body: #f1f5f9;
-  --muted: #94a3b8;
-  --accent: #6366f1;
-  --accent-soft: #1e1b4b;
-  --pm: #fcd34d;
-  --pm-soft: rgba(245, 158, 11, 0.1);
-  --pm-line: rgba(245, 158, 11, 0.3);
+  --app: #071210;
+  --panel: #0c1a17;
+  --raised: #14302b;
+  --line: #1d3d37;
+  --body: #e7f2ef;
+  --muted: #8aa8a1;
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.12);
+  --pm: #fbbf24;
+  --pm-soft: rgba(251, 191, 36, 0.1);
+  --pm-line: rgba(251, 191, 36, 0.28);
 }
 
 @theme inline {
@@ -50,24 +47,26 @@
   --color-pm: var(--pm);
   --color-pm-soft: var(--pm-soft);
   --color-pm-line: var(--pm-line);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
 }
 
 body {
   background: var(--app);
   color: var(--body);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
-  /* Removes the 300ms double-tap zoom delay on touch devices. */
+  font-family: var(--font-body), system-ui, sans-serif;
   touch-action: manipulation;
 }
 
-/* Counts and timestamps line up in columns instead of jittering. */
+.font-display {
+  font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+}
+
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* Respect users who have asked the OS to reduce motion. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
