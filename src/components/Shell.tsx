@@ -52,7 +52,7 @@ function isOnline(lastSeenAt: string): boolean {
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
-    <span className="tabular ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+    <span className="tabular ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-on-accent">
       {count > 99 ? '99+' : count}
     </span>
   )
@@ -139,7 +139,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </button>
         <span className="font-semibold">Cohort Comms</span>
         {totalUnread > 0 && (
-          <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-white">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-on-accent">
             {totalUnread}
           </span>
         )}

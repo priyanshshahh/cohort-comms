@@ -364,7 +364,7 @@ export default function DemoWorkspace() {
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => runTourAction(tourStep)}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:brightness-110"
               >
                 {TOUR_STEPS[tourStep].action}
               </button>
@@ -476,7 +476,7 @@ export default function DemoWorkspace() {
                     {channel.name}
                   </span>
                   {channel.unread > 0 && (
-                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white tabular">
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-on-accent tabular">
                       {channel.unread}
                     </span>
                   )}
@@ -513,7 +513,7 @@ export default function DemoWorkspace() {
                     {member.name}
                   </span>
                   {member.unread > 0 && (
-                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white tabular">
+                    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-on-accent tabular">
                       {member.unread}
                     </span>
                   )}
@@ -650,7 +650,7 @@ export default function DemoWorkspace() {
               <button
                 type="submit"
                 disabled={!draft.trim()}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-40"
               >
                 Send
               </button>

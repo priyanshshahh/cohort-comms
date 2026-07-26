@@ -39,7 +39,7 @@ export default async function Landing() {
         <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/demo"
-            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white hover:brightness-110"
+            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-on-accent hover:brightness-110"
           >
             Open live demo — no signup
           </Link>

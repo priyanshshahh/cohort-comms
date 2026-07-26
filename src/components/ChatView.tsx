@@ -282,7 +282,7 @@ export default function ChatView({
             <button
               type="submit"
               disabled={sending || !draft.trim()}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-40"
             >
               Send
             </button>

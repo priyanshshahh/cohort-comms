@@ -15,7 +15,7 @@ export default function DemoPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-app text-body">
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-5 py-3">
-        <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-semibold text-white">
+        <span className="rounded-md bg-accent px-2.5 py-0.5 text-xs font-semibold text-on-accent">
           LIVE DEMO
         </span>
         <p className="text-sm text-muted">
@@ -24,7 +24,7 @@ export default function DemoPage() {
         <div className="ml-auto flex items-center gap-2">
           <Link
             href="/sign-up"
-            className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-white hover:brightness-110"
+            className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-on-accent hover:brightness-110"
           >
             Join the real workspace
           </Link>
