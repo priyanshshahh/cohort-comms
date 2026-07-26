@@ -193,6 +193,9 @@ export default function ChatView({
                     <img
                       src={message.authorAvatar}
                       alt=""
+                      width={32}
+                      height={32}
+                      loading="lazy"
                       className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
                     />
                   ) : (
@@ -217,13 +220,17 @@ export default function ChatView({
                         <button
                           key={reaction.emoji}
                           onClick={() => react(message.id, reaction.emoji)}
+                          aria-label={`${reaction.mine ? 'Remove' : 'Add'} ${reaction.emoji} reaction`}
+                          aria-pressed={reaction.mine}
                           className={`rounded-full border px-2 py-0.5 text-xs ${
                             reaction.mine
                               ? 'border-accent bg-accent-soft'
                               : 'border-line hover:bg-raised'
                           }`}
                         >
-                          {reaction.emoji} {reaction.count}
+                          <span className="tabular">
+                            {reaction.emoji} {reaction.count}
+                          </span>
                         </button>
                       ))}
                       <div className="group relative">
@@ -238,7 +245,8 @@ export default function ChatView({
                             <button
                               key={emoji}
                               onClick={() => react(message.id, emoji)}
-                              className="rounded px-1.5 py-0.5 text-sm hover:bg-raised"
+                              aria-label={`React with ${emoji}`}
+                              className="rounded px-1.5 py-0.5 text-sm hover:bg-raised focus-visible:ring-2 focus-visible:ring-accent"
                             >
                               {emoji}
                             </button>
@@ -266,8 +274,10 @@ export default function ChatView({
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={`Message ${title}`}
-              className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+              placeholder={`Message ${title}…`}
+              aria-label={`Message ${title}`}
+              autoComplete="off"
+              className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
             <button
               type="submit"

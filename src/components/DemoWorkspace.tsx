@@ -176,7 +176,10 @@ export default function DemoWorkspace() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search messages…"
             aria-label="Search messages"
-            className="w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+            type="search"
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
           {query.trim().length >= 2 && (
             <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-line bg-panel shadow-xl">
@@ -269,7 +272,7 @@ export default function DemoWorkspace() {
         </nav>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main id="main" className="flex min-w-0 flex-1 flex-col">
         <header className="border-b border-line px-5 py-3">
           <h1 className="font-semibold">
             {active === 'announcements' ? '📣' : '#'}
@@ -350,7 +353,7 @@ export default function DemoWorkspace() {
       </main>
 
       {forthOpen && (
-        <section className="fixed inset-0 z-40 flex flex-col border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
+        <section className="fixed inset-0 z-40 flex flex-col overscroll-contain border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
           <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="text-sm font-semibold text-pm">⚒ Forth board</span>
             <a

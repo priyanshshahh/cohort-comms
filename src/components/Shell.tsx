@@ -51,7 +51,7 @@ function isOnline(lastSeenAt: string): boolean {
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
-    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+    <span className="tabular ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
       {count > 99 ? '99+' : count}
     </span>
   )
@@ -169,7 +169,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search messages…"
             aria-label="Search messages"
-            className="w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+            type="search"
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           />
           {debounced.length >= 2 && (
             <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-panel shadow-xl">
@@ -246,9 +249,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <input
               value={newChannel}
               onChange={(e) => setNewChannel(e.target.value)}
-              placeholder="+ new channel"
+              placeholder="Add a channel…"
+              aria-label="Create a new channel"
+              autoComplete="off"
+              spellCheck={false}
               disabled={creating}
-              className="w-full rounded-md border border-line bg-raised px-2 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+              className="w-full rounded-md border border-line bg-raised px-2 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             />
             {error && <p className="pt-1 text-xs text-red-500">{error}</p>}
           </form>
@@ -301,14 +307,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </nav>
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
+      <main id="main" className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
         {children}
       </main>
 
       {/* Forth command centre — the board rendered beside the conversation
           so a member never leaves comms to update a ticket. */}
       {forthOpen && (
-        <section className="absolute inset-0 z-40 flex w-full flex-col border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
+        <section className="absolute inset-0 z-40 flex w-full flex-col overscroll-contain border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
           <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <span className="text-sm font-semibold text-pm">⚒ Forth board</span>
             <a

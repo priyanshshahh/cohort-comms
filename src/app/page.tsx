@@ -25,7 +25,7 @@ export default async function Landing() {
   if (userId) redirect('/c/general')
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-16">
+    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-16">
       <div>
         <p className="text-sm font-medium uppercase tracking-wider text-accent">
           Hult Cohort Developer Program · Summer Pilot 2026

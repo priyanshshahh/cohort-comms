@@ -7,6 +7,9 @@
 /* Semantic tokens. Components reference these (bg-app, text-body, …) so a
    single palette swap re-themes the whole product. */
 :root {
+  /* Tells the browser to render native scrollbars, inputs and form controls
+     in the matching scheme. Without this, dark mode gets light scrollbars. */
+  color-scheme: light;
   --app: #ffffff;
   --panel: #f8fafc;
   --raised: #f1f5f9;
@@ -21,6 +24,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --app: #020617;
   --panel: #0b1220;
   --raised: #1e293b;
@@ -54,4 +58,23 @@ body {
   background: var(--app);
   color: var(--body);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  /* Removes the 300ms double-tap zoom delay on touch devices. */
+  touch-action: manipulation;
+}
+
+/* Counts and timestamps line up in columns instead of jittering. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect users who have asked the OS to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
