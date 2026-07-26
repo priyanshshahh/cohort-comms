@@ -15,6 +15,9 @@ type ChatMessage = {
   authorHandle: string | null
   authorAvatar: string | null
   reactions: Reaction[]
+  replyCount?: number
+  parentId?: number | null
+  editedAt?: string | null
 }
 
 /** Reaction palette, mirrored by the allow-list in /api/reactions. */
@@ -96,12 +99,17 @@ export default function ChatView({
   subtitle,
   readOnly = false,
   readOnlyReason,
+  onOpenThread,
+  compact = false,
 }: {
   scope: string
   title: string
   subtitle?: string
   readOnly?: boolean
   readOnlyReason?: string
+  /** Opens the given root message in the thread panel. */
+  onOpenThread?: (rootId: number) => void
+  compact?: boolean
 }) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -233,6 +241,18 @@ export default function ChatView({
                           </span>
                         </button>
                       ))}
+                      {onOpenThread && !message.parentId && (
+                        <button
+                          onClick={() => onOpenThread(message.id)}
+                          className="rounded-full border border-line px-2 py-0.5 text-xs text-muted hover:bg-raised hover:text-body"
+                        >
+                          {message.replyCount
+                            ? `${message.replyCount} ${
+                                message.replyCount === 1 ? 'reply' : 'replies'
+                              }`
+                            : 'Reply'}
+                        </button>
+                      )}
                       <div className="group relative">
                         <button
                           aria-label="Add reaction"

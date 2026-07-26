@@ -49,11 +49,19 @@ export const messages = pgTable(
     dmKey: text('dm_key'),
     authorId: text('author_id').notNull(),
     body: text('body').notNull(),
+    /**
+     * Set on a threaded reply, pointing at the root message it answers.
+     * Root messages leave it null, so a conversation lists only roots and
+     * each root carries its reply count.
+     */
+    parentId: integer('parent_id'),
+    editedAt: timestamp('edited_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => [
     index('messages_channel_idx').on(t.channelId, t.id),
     index('messages_dm_idx').on(t.dmKey, t.id),
+    index('messages_parent_idx').on(t.parentId, t.id),
   ]
 )
 

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import ChatView from '@/components/ChatView'
+import Conversation from '@/components/Conversation'
 import { getDb } from '@/db'
 import { channels, users } from '@/db/schema'
 import { isAdminHandle, requireUserId } from '@/lib/data'
@@ -36,7 +36,7 @@ export default async function ChannelPage({
   }
 
   return (
-    <ChatView
+    <Conversation
       scope={`channel:${channel.slug}`}
       title={`#${channel.name}`}
       subtitle={channel.description ?? undefined}

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
-import ChatView from '@/components/ChatView'
+import Conversation from '@/components/Conversation'
 import { getDb } from '@/db'
 import { users } from '@/db/schema'
 
@@ -22,7 +22,7 @@ export default async function DirectMessagePage({
   if (!person) notFound()
 
   return (
-    <ChatView
+    <Conversation
       scope={`dm:${person.id}`}
       title={person.name}
       subtitle={`Direct message · @${person.handle}`}

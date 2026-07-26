@@ -2,11 +2,13 @@ import { auth, currentUser } from '@clerk/nextjs/server'
 import {
   and,
   asc,
+  count,
   desc,
   eq,
   ilike,
   inArray,
   isNotNull,
+  isNull,
   like,
   or,
 } from 'drizzle-orm'
@@ -129,8 +131,9 @@ export function dmKeyFor(a: string, b: string): string {
 export type Scope =
   | { kind: 'channel'; slug: string }
   | { kind: 'dm'; otherUserId: string }
+  | { kind: 'thread'; rootId: number }
 
-/** Parse `channel:general` / `dm:user_123` into a typed scope. */
+/** Parse `channel:general` / `dm:user_123` / `thread:42` into a typed scope. */
 export function parseScope(raw: string | null): Scope | null {
   if (!raw) return null
   const [kind, ...rest] = raw.split(':')
@@ -138,14 +141,20 @@ export function parseScope(raw: string | null): Scope | null {
   if (!value) return null
   if (kind === 'channel') return { kind: 'channel', slug: value }
   if (kind === 'dm') return { kind: 'dm', otherUserId: value }
+  if (kind === 'thread') {
+    const rootId = Number(value)
+    return Number.isInteger(rootId) && rootId > 0
+      ? { kind: 'thread', rootId }
+      : null
+  }
   return null
 }
 
 /** Canonical string form used as the key in the `reads` table. */
 export function scopeKey(scope: Scope, meId: string): string {
-  return scope.kind === 'channel'
-    ? `channel:${scope.slug}`
-    : `dm:${dmKeyFor(meId, scope.otherUserId)}`
+  if (scope.kind === 'channel') return `channel:${scope.slug}`
+  if (scope.kind === 'thread') return `thread:${scope.rootId}`
+  return `dm:${dmKeyFor(meId, scope.otherUserId)}`
 }
 
 export async function listChannels() {
@@ -162,38 +171,109 @@ const MESSAGE_FIELDS = {
   id: messages.id,
   body: messages.body,
   createdAt: messages.createdAt,
+  editedAt: messages.editedAt,
+  parentId: messages.parentId,
   authorId: messages.authorId,
   authorName: users.name,
   authorHandle: users.handle,
   authorAvatar: users.avatarUrl,
 }
 
-/** Messages for a conversation, oldest first, with author details joined. */
+/**
+ * Messages for a conversation, oldest first, with author details joined.
+ * Channel and DM views list only root messages; replies live inside their
+ * thread and are counted onto the root by `withReplyCounts`.
+ */
 export async function listMessages(scope: Scope, meId: string) {
   const db = getDb()
 
-  if (scope.kind === 'channel') {
-    return db
+  if (scope.kind === 'thread') {
+    // The root message first, then its replies in order.
+    const rows = await db
       .select(MESSAGE_FIELDS)
       .from(messages)
-      .innerJoin(channels, eq(messages.channelId, channels.id))
       .leftJoin(users, eq(messages.authorId, users.id))
-      .where(eq(channels.slug, scope.slug))
+      .where(
+        or(eq(messages.id, scope.rootId), eq(messages.parentId, scope.rootId))
+      )
       .orderBy(asc(messages.id))
       .limit(500)
+    return rows.map((r) => ({ ...r, replyCount: 0 }))
   }
 
-  return db
-    .select(MESSAGE_FIELDS)
+  const base =
+    scope.kind === 'channel'
+      ? db
+          .select(MESSAGE_FIELDS)
+          .from(messages)
+          .innerJoin(channels, eq(messages.channelId, channels.id))
+          .leftJoin(users, eq(messages.authorId, users.id))
+          .where(and(eq(channels.slug, scope.slug), isNull(messages.parentId)))
+      : db
+          .select(MESSAGE_FIELDS)
+          .from(messages)
+          .leftJoin(users, eq(messages.authorId, users.id))
+          .where(
+            and(
+              eq(messages.dmKey, dmKeyFor(meId, scope.otherUserId)),
+              isNull(messages.parentId)
+            )
+          )
+
+  const rows = await base.orderBy(asc(messages.id)).limit(500)
+  return withReplyCounts(rows)
+}
+
+/** Attach a reply count to each root message in one extra query. */
+async function withReplyCounts<T extends { id: number }>(rows: T[]) {
+  if (rows.length === 0) return rows.map((r) => ({ ...r, replyCount: 0 }))
+  const db = getDb()
+
+  const counts = await db
+    .select({ parentId: messages.parentId, total: count() })
     .from(messages)
-    .leftJoin(users, eq(messages.authorId, users.id))
-    .where(eq(messages.dmKey, dmKeyFor(meId, scope.otherUserId)))
-    .orderBy(asc(messages.id))
-    .limit(500)
+    .where(
+      inArray(
+        messages.parentId,
+        rows.map((r) => r.id)
+      )
+    )
+    .groupBy(messages.parentId)
+
+  const byParent = new Map(counts.map((c) => [c.parentId, Number(c.total)]))
+  return rows.map((r) => ({ ...r, replyCount: byParent.get(r.id) ?? 0 }))
 }
 
 export async function postMessage(scope: Scope, meId: string, body: string) {
   const db = getDb()
+
+  if (scope.kind === 'thread') {
+    // A reply inherits the root's conversation so it stays searchable and
+    // stays inside the same channel or DM.
+    const [root] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, scope.rootId))
+      .limit(1)
+    if (!root) throw new Error('thread not found')
+    if (root.parentId) throw new Error('replies cannot be nested further')
+
+    if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
+      throw new Error('not a participant in this conversation')
+    }
+
+    const [row] = await db
+      .insert(messages)
+      .values({
+        channelId: root.channelId,
+        dmKey: root.dmKey,
+        parentId: root.id,
+        authorId: meId,
+        body,
+      })
+      .returning()
+    return row
+  }
 
   if (scope.kind === 'channel') {
     const [channel] = await db
@@ -246,6 +326,7 @@ export async function unreadByScope(meId: string) {
         authorId: messages.authorId,
       })
       .from(messages)
+      .where(isNull(messages.parentId))
       .orderBy(desc(messages.id))
       .limit(UNREAD_SCAN_LIMIT),
     db.select({ id: channels.id, slug: channels.slug }).from(channels),
