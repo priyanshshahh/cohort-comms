@@ -75,6 +75,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     refreshInterval: 5000,
   })
 
+  // The thread panel and the Forth board share the right-hand slot.
+  useEffect(() => {
+    function onPanel(event: Event) {
+      const which = (event as CustomEvent<string>).detail
+      if (which === 'thread') setForthOpen(false)
+    }
+    window.addEventListener('comms:panel', onPanel)
+    return () => window.removeEventListener('comms:panel', onPanel)
+  }, [])
+
+  function toggleForth() {
+    setForthOpen((open) => {
+      const next = !open
+      if (next) {
+        window.dispatchEvent(new CustomEvent('comms:panel', { detail: 'forth' }))
+      }
+      return next
+    })
+  }
+
   // Debounce so typing does not fire a query per keystroke.
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query.trim()), 250)
@@ -211,7 +231,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
 
         <button
-          onClick={() => setForthOpen((v) => !v)}
+          onClick={toggleForth}
           className="rounded-lg border border-pm-line bg-pm-soft px-3 py-2 text-left text-sm font-medium text-pm hover:brightness-110"
         >
           ⚒ {forthOpen ? 'Hide' : 'Open'} Forth board
