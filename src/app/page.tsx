@@ -27,13 +27,13 @@ export default async function Landing() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-10 px-6 py-16">
       <div>
-        <p className="text-sm font-medium uppercase tracking-wider text-indigo-400">
+        <p className="text-sm font-medium uppercase tracking-wider text-accent">
           Hult Cohort Developer Program · Summer Pilot 2026
         </p>
         <h1 className="pt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
           Cohort Comms
         </h1>
-        <p className="max-w-xl pt-4 text-lg text-slate-400">
+        <p className="max-w-xl pt-4 text-lg text-muted">
           The cohort&apos;s internal communications platform. Channels, direct
           messages, and unread notifications, signed in with the same GitHub
           account you use for the cohort repo and the Forth board.
@@ -43,13 +43,13 @@ export default async function Landing() {
       <div className="flex flex-wrap gap-3">
         <Link
           href="/sign-up"
-          className="rounded-lg bg-indigo-500 px-5 py-2.5 font-semibold text-white hover:bg-indigo-400"
+          className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-white hover:brightness-110"
         >
           Create your account
         </Link>
         <Link
           href="/sign-in"
-          className="rounded-lg border border-slate-700 px-5 py-2.5 font-semibold text-slate-200 hover:bg-slate-800"
+          className="rounded-lg border border-line px-5 py-2.5 font-semibold text-body hover:bg-raised"
         >
           Sign in
         </Link>
@@ -57,7 +57,7 @@ export default async function Landing() {
           href={FORTH_BASE_URL}
           target="_blank"
           rel="noreferrer"
-          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 py-2.5 font-semibold text-amber-200 hover:bg-amber-500/20"
+          className="rounded-lg border border-pm-line bg-pm-soft px-5 py-2.5 font-semibold text-pm hover:brightness-110"
         >
           Forth board ↗
         </a>
@@ -67,10 +67,10 @@ export default async function Landing() {
         {FEATURES.map((feature) => (
           <li
             key={feature.title}
-            className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+            className="rounded-xl border border-line bg-panel p-4"
           >
             <h2 className="font-semibold">{feature.title}</h2>
-            <p className="pt-1.5 text-sm text-slate-400">{feature.body}</p>
+            <p className="pt-1.5 text-sm text-muted">{feature.body}</p>
           </li>
         ))}
       </ul>

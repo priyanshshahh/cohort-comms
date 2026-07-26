@@ -1,16 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import { UserButton } from '@clerk/nextjs'
+import ThemeToggle from './ThemeToggle'
 import { FORTH_BASE_URL } from '@/lib/forth'
 
 type Channel = {
   slug: string
   name: string
   description: string | null
+  adminOnly: boolean
   unread: number
 }
 
@@ -25,9 +27,18 @@ type Member = {
 }
 
 type Bootstrap = {
-  me: { id: string; handle: string; name: string; avatarUrl: string | null }
+  me: { id: string; handle: string; name: string; isAdmin: boolean }
   channels: Channel[]
   members: Member[]
+}
+
+type SearchHit = {
+  id: number
+  body: string
+  createdAt: string
+  authorName: string | null
+  href: string
+  label: string
 }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -40,7 +51,7 @@ function isOnline(lastSeenAt: string): boolean {
 function UnreadBadge({ count }: { count: number }) {
   if (count <= 0) return null
   return (
-    <span className="ml-auto min-w-5 rounded-full bg-indigo-500 px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
+    <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 py-0.5 text-center text-[11px] font-semibold text-white">
       {count > 99 ? '99+' : count}
     </span>
   )
@@ -48,14 +59,39 @@ function UnreadBadge({ count }: { count: number }) {
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [creating, setCreating] = useState(false)
+  const router = useRouter()
   const [newChannel, setNewChannel] = useState('')
+  const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [forthOpen, setForthOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const searchBox = useRef<HTMLDivElement>(null)
 
   const { data, mutate } = useSWR<Bootstrap>('/api/bootstrap', fetcher, {
     refreshInterval: 5000,
   })
+
+  // Debounce so typing does not fire a query per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 250)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const { data: search } = useSWR<{ results: SearchHit[] }>(
+    debounced.length >= 2 ? `/api/search?q=${encodeURIComponent(debounced)}` : null,
+    fetcher
+  )
+
+  // Dismiss the results panel when clicking elsewhere.
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      if (!searchBox.current?.contains(event.target as Node)) setQuery('')
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
 
   async function createChannel(event: React.FormEvent) {
     event.preventDefault()
@@ -76,8 +112,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       setError(payload.error ?? 'could not create channel')
       return
     }
+    const created = await res.json()
     setNewChannel('')
     mutate()
+    if (created?.channel?.slug) router.push(`/c/${created.channel.slug}`)
   }
 
   const channels = data?.channels ?? []
@@ -87,23 +125,24 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     members.reduce((sum, m) => sum + m.unread, 0)
 
   return (
-    <div className="flex h-dvh bg-slate-950 text-slate-100">
+    <div className="flex h-dvh bg-app text-body">
       {/* Mobile header */}
-      <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-3 border-b border-slate-800 bg-slate-900/95 px-4 py-3 backdrop-blur md:hidden">
+      <header className="fixed inset-x-0 top-0 z-30 flex items-center gap-3 border-b border-line bg-panel/95 px-4 py-3 backdrop-blur md:hidden">
         <button
           onClick={() => setMobileOpen((v) => !v)}
-          className="rounded-md border border-slate-700 px-2 py-1 text-sm"
+          className="rounded-md border border-line px-2 py-1 text-sm"
           aria-label="Toggle navigation"
         >
           ☰
         </button>
         <span className="font-semibold">Cohort Comms</span>
         {totalUnread > 0 && (
-          <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-white">
             {totalUnread}
           </span>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <UserButton />
         </div>
       </header>
@@ -111,28 +150,68 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <aside
         className={`${
           mobileOpen ? 'flex' : 'hidden'
-        } absolute inset-y-0 left-0 z-20 w-72 flex-col gap-4 overflow-y-auto border-r border-slate-800 bg-slate-900 px-4 pb-6 pt-20 md:static md:flex md:pt-5`}
+        } absolute inset-y-0 left-0 z-20 w-72 flex-col gap-4 overflow-y-auto border-r border-line bg-panel px-4 pb-6 pt-20 md:static md:flex md:pt-5`}
       >
         <div className="hidden items-center gap-2 md:flex">
           <span className="text-lg font-semibold tracking-tight">
             Cohort Comms
           </span>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             <UserButton />
           </div>
         </div>
 
-        <a
-          href={FORTH_BASE_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200 hover:bg-amber-500/20"
+        {/* Global search */}
+        <div className="relative" ref={searchBox}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search messages…"
+            aria-label="Search messages"
+            className="w-full rounded-md border border-line bg-raised px-2.5 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+          {debounced.length >= 2 && (
+            <div className="absolute inset-x-0 top-full z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-line bg-panel shadow-xl">
+              {(search?.results ?? []).length === 0 && (
+                <p className="px-3 py-2 text-xs text-muted">
+                  {search ? 'No matches.' : 'Searching…'}
+                </p>
+              )}
+              {(search?.results ?? []).map((hit) => (
+                <Link
+                  key={hit.id}
+                  href={hit.href}
+                  onClick={() => {
+                    setQuery('')
+                    setMobileOpen(false)
+                  }}
+                  className="block border-b border-line px-3 py-2 last:border-0 hover:bg-raised"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[11px] font-semibold text-accent">
+                      {hit.label}
+                    </span>
+                    <span className="truncate text-[11px] text-muted">
+                      {hit.authorName}
+                    </span>
+                  </div>
+                  <p className="line-clamp-2 text-xs">{hit.body}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <button
+          onClick={() => setForthOpen((v) => !v)}
+          className="rounded-lg border border-pm-line bg-pm-soft px-3 py-2 text-left text-sm font-medium text-pm hover:brightness-110"
         >
-          ⚒ Open Forth board ↗
-        </a>
+          ⚒ {forthOpen ? 'Hide' : 'Open'} Forth board
+        </button>
 
         <nav>
-          <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Channels
           </h2>
           <ul className="space-y-0.5">
@@ -146,11 +225,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-1 rounded-md px-2 py-1.5 text-sm ${
                       active
-                        ? 'bg-indigo-500/20 text-white'
-                        : 'text-slate-300 hover:bg-slate-800'
+                        ? 'bg-accent-soft text-body'
+                        : 'text-muted hover:bg-raised hover:text-body'
                     }`}
                   >
-                    <span className="text-slate-500">#</span>
+                    <span className="text-muted">
+                      {channel.adminOnly ? '📣' : '#'}
+                    </span>
                     <span className={channel.unread > 0 ? 'font-semibold' : ''}>
                       {channel.name}
                     </span>
@@ -167,14 +248,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               onChange={(e) => setNewChannel(e.target.value)}
               placeholder="+ new channel"
               disabled={creating}
-              className="w-full rounded-md border border-slate-700 bg-slate-800/60 px-2 py-1.5 text-sm placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-md border border-line bg-raised px-2 py-1.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
             />
-            {error && <p className="pt-1 text-xs text-red-400">{error}</p>}
+            {error && <p className="pt-1 text-xs text-red-500">{error}</p>}
           </form>
         </nav>
 
         <nav>
-          <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          <h2 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Direct messages
           </h2>
           <ul className="space-y-0.5">
@@ -188,15 +269,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
                       active
-                        ? 'bg-indigo-500/20 text-white'
-                        : 'text-slate-300 hover:bg-slate-800'
+                        ? 'bg-accent-soft text-body'
+                        : 'text-muted hover:bg-raised hover:text-body'
                     }`}
                   >
                     <span
                       className={`h-2 w-2 shrink-0 rounded-full ${
                         isOnline(member.lastSeenAt)
-                          ? 'bg-emerald-400'
-                          : 'bg-slate-600'
+                          ? 'bg-emerald-500'
+                          : 'bg-muted/40'
                       }`}
                       aria-hidden
                     />
@@ -206,9 +287,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                       }`}
                     >
                       {member.name}
-                      {member.isSelf && (
-                        <span className="text-slate-500"> (you)</span>
-                      )}
+                      {member.isSelf && <span className="text-muted"> (you)</span>}
                     </span>
                     <UnreadBadge count={member.unread} />
                   </Link>
@@ -216,9 +295,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               )
             })}
             {members.length === 0 && (
-              <li className="px-2 py-1.5 text-sm text-slate-500">
-                No members yet.
-              </li>
+              <li className="px-2 py-1.5 text-sm text-muted">No members yet.</li>
             )}
           </ul>
         </nav>
@@ -227,6 +304,35 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <main className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
         {children}
       </main>
+
+      {/* Forth command centre — the board rendered beside the conversation
+          so a member never leaves comms to update a ticket. */}
+      {forthOpen && (
+        <section className="absolute inset-0 z-40 flex w-full flex-col border-l border-line bg-app md:static md:z-0 md:w-[42%] md:max-w-2xl">
+          <header className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+            <span className="text-sm font-semibold text-pm">⚒ Forth board</span>
+            <a
+              href={FORTH_BASE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-muted underline hover:text-body"
+            >
+              Open in tab ↗
+            </a>
+            <button
+              onClick={() => setForthOpen(false)}
+              className="ml-auto rounded-md border border-line px-2 py-1 text-xs text-muted hover:bg-raised hover:text-body"
+            >
+              Close
+            </button>
+          </header>
+          <iframe
+            src={FORTH_BASE_URL}
+            title="Forth project board"
+            className="h-full w-full flex-1 bg-white"
+          />
+        </section>
+      )}
     </div>
   )
 }

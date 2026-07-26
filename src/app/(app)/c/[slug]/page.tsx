@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import ChatView from '@/components/ChatView'
 import { getDb } from '@/db'
-import { channels } from '@/db/schema'
+import { channels, users } from '@/db/schema'
+import { isAdminHandle, requireUserId } from '@/lib/data'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,8 +13,9 @@ export default async function ChannelPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+  const db = getDb()
 
-  const [channel] = await getDb()
+  const [channel] = await db
     .select()
     .from(channels)
     .where(eq(channels.slug, slug))
@@ -21,11 +23,25 @@ export default async function ChannelPage({
 
   if (!channel) notFound()
 
+  // #announcements is broadcast-only: members read, admins post.
+  let readOnly = false
+  if (channel.adminOnly) {
+    const meId = await requireUserId()
+    const [me] = await db
+      .select({ handle: users.handle })
+      .from(users)
+      .where(eq(users.id, meId))
+      .limit(1)
+    readOnly = !isAdminHandle(me?.handle)
+  }
+
   return (
     <ChatView
       scope={`channel:${channel.slug}`}
       title={`#${channel.name}`}
       subtitle={channel.description ?? undefined}
+      readOnly={readOnly}
+      readOnlyReason="Only cohort admins can post in #announcements."
     />
   )
 }

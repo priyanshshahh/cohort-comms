@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,8 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Cohort Comms",
   description:
-    "Internal communications for the Hult Cohort Developer Program — channels, direct messages, and Forth board links in one place.",
+    "Internal communications for the Hult Cohort Developer Program — channels, direct messages, search, and the Forth board side by side.",
 };
+
+/**
+ * Applies the saved theme before first paint so the page never flashes the
+ * wrong palette. Defaults to dark.
+ */
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})()`;
 
 export default function RootLayout({
   children,
@@ -26,12 +31,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider appearance={{ theme: dark }}>
+    <ClerkProvider>
       <html
         lang="en"
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+        suppressHydrationWarning
       >
-        <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
+        <head>
+          <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        </head>
+        <body className="min-h-full flex flex-col bg-app text-body">
           {children}
         </body>
       </html>

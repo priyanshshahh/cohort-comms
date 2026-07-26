@@ -1,14 +1,21 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
-import { asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, isNotNull, like, or } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { channels, messages, reads, users } from '@/db/schema'
 
 /** Channels every cohort member lands in, created on first boot. */
 export const DEFAULT_CHANNELS = [
   {
+    slug: 'announcements',
+    name: 'announcements',
+    description: 'Staff and admin broadcasts — read-only for members',
+    isDefault: true,
+    adminOnly: true,
+  },
+  {
     slug: 'general',
     name: 'general',
-    description: 'Cohort-wide announcements and chatter',
+    description: 'Cohort-wide chatter',
     isDefault: true,
   },
   {
@@ -33,6 +40,22 @@ export const DEFAULT_CHANNELS = [
 
 /** Cap on the history scanned for unread badges. */
 const UNREAD_SCAN_LIMIT = 2000
+
+/**
+ * Cohort admins, by handle. Configurable per deployment so the winning
+ * platform can hand posting rights to staff without a code change.
+ */
+export function adminHandles(): string[] {
+  return (process.env.ADMIN_HANDLES ?? 'admin,priyanshshahh')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+export function isAdminHandle(handle: string | null | undefined): boolean {
+  if (!handle) return false
+  return adminHandles().includes(handle.toLowerCase())
+}
 
 export async function requireUserId(): Promise<string> {
   const { userId } = await auth()
@@ -169,6 +192,18 @@ export async function postMessage(scope: Scope, meId: string, body: string) {
       .where(eq(channels.slug, scope.slug))
       .limit(1)
     if (!channel) throw new Error('channel not found')
+
+    if (channel.adminOnly) {
+      const [author] = await db
+        .select({ handle: users.handle })
+        .from(users)
+        .where(eq(users.id, meId))
+        .limit(1)
+      if (!isAdminHandle(author?.handle)) {
+        throw new Error('#announcements is read-only for members')
+      }
+    }
+
     const [row] = await db
       .insert(messages)
       .values({ channelId: channel.id, authorId: meId, body })
@@ -232,6 +267,50 @@ export async function unreadByScope(meId: string) {
   }
 
   return counts
+}
+
+/**
+ * Keyword search across every public channel plus the caller's own DMs.
+ * DMs belonging to other people are never searchable.
+ */
+export async function searchMessages(meId: string, query: string) {
+  const db = getDb()
+  const term = `%${query.replace(/[%_]/g, (m) => `\\${m}`)}%`
+
+  const rows = await db
+    .select({
+      id: messages.id,
+      body: messages.body,
+      createdAt: messages.createdAt,
+      channelSlug: channels.slug,
+      dmKey: messages.dmKey,
+      authorName: users.name,
+      authorHandle: users.handle,
+    })
+    .from(messages)
+    .leftJoin(channels, eq(messages.channelId, channels.id))
+    .leftJoin(users, eq(messages.authorId, users.id))
+    .where(
+      and(
+        ilike(messages.body, term),
+        or(isNotNull(messages.channelId), like(messages.dmKey, `%${meId}%`))
+      )
+    )
+    .orderBy(desc(messages.id))
+    .limit(50)
+
+  return rows.map((r) => ({
+    id: r.id,
+    body: r.body,
+    createdAt: r.createdAt,
+    authorName: r.authorName,
+    authorHandle: r.authorHandle,
+    // Where to send the user when they click the result.
+    href: r.channelSlug
+      ? `/c/${r.channelSlug}`
+      : `/dm/${(r.dmKey ?? '').split('~').find((id) => id !== meId) ?? ''}`,
+    label: r.channelSlug ? `#${r.channelSlug}` : 'Direct message',
+  }))
 }
 
 export async function markRead(scope: Scope, meId: string, messageId: number) {

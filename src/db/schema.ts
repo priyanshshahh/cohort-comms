@@ -28,6 +28,9 @@ export const channels = pgTable('channels', {
   name: text('name').notNull(),
   description: text('description'),
   isDefault: boolean('is_default').notNull().default(false),
+  /** Only cohort admins may post; everyone may read. Used by #announcements. */
+  adminOnly: boolean('admin_only').notNull().default(false),
+  archived: boolean('archived').notNull().default(false),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })

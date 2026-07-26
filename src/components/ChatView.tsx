@@ -23,11 +23,20 @@ function formatTime(iso: string): string {
   })
 }
 
+function formatDay(iso: string): string {
+  const date = new Date(iso)
+  const today = new Date()
+  const isToday = date.toDateString() === today.toDateString()
+  return isToday
+    ? 'Today'
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
 /** Render message text with bare URLs turned into links. */
 function MessageBody({ body }: { body: string }) {
   const parts = body.split(/(https?:\/\/[^\s<>()]+)/g)
   return (
-    <p className="whitespace-pre-wrap break-words text-sm text-slate-200">
+    <p className="whitespace-pre-wrap break-words text-sm">
       {parts.map((part, i) =>
         /^https?:\/\//.test(part) ? (
           <a
@@ -35,7 +44,7 @@ function MessageBody({ body }: { body: string }) {
             href={part}
             target="_blank"
             rel="noreferrer"
-            className="text-indigo-300 underline decoration-indigo-500/40 hover:text-indigo-200"
+            className="text-accent underline decoration-accent/40"
           >
             {part}
           </a>
@@ -63,12 +72,12 @@ function ForthCards({ body }: { body: string }) {
           href={link.url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 hover:bg-amber-500/20"
+          className="flex items-center gap-2 rounded-lg border border-pm-line bg-pm-soft px-3 py-2 text-xs text-pm hover:brightness-110"
         >
           <span aria-hidden>⚒</span>
           <span className="font-semibold">{link.label}</span>
-          <span className="truncate text-amber-200/60">{link.url}</span>
-          <span className="ml-auto shrink-0 text-amber-200/60">Open ↗</span>
+          <span className="truncate opacity-70">{link.url}</span>
+          <span className="ml-auto shrink-0 opacity-70">Open ↗</span>
         </a>
       ))}
     </div>
@@ -79,10 +88,14 @@ export default function ChatView({
   scope,
   title,
   subtitle,
+  readOnly = false,
+  readOnlyReason,
 }: {
   scope: string
   title: string
   subtitle?: string
+  readOnly?: boolean
+  readOnlyReason?: string
 }) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -126,75 +139,99 @@ export default function ChatView({
     mutate()
   }
 
+  let lastDay = ''
+
   return (
     <>
-      <header className="border-b border-slate-800 px-5 py-3">
+      <header className="border-b border-line px-5 py-3">
         <h1 className="font-semibold">{title}</h1>
-        {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
-        {!data && <p className="text-sm text-slate-500">Loading messages…</p>}
+        {!data && <p className="text-sm text-muted">Loading messages…</p>}
         {data && messages.length === 0 && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             No messages yet. Say something to get it started.
           </p>
         )}
 
         <ul className="flex flex-col gap-3">
-          {messages.map((message) => (
-            <li key={message.id} className="flex gap-3">
-              {message.authorAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={message.authorAvatar}
-                  alt=""
-                  className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
-                />
-              ) : (
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-700 text-xs">
-                  {(message.authorName ?? '?').slice(0, 1).toUpperCase()}
+          {messages.map((message) => {
+            const day = formatDay(message.createdAt)
+            const showDay = day !== lastDay
+            lastDay = day
+            return (
+              <li key={message.id}>
+                {showDay && (
+                  <div className="flex items-center gap-3 py-2">
+                    <span className="h-px flex-1 bg-line" />
+                    <span className="text-[11px] font-medium text-muted">
+                      {day}
+                    </span>
+                    <span className="h-px flex-1 bg-line" />
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  {message.authorAvatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={message.authorAvatar}
+                      alt=""
+                      className="mt-0.5 h-8 w-8 shrink-0 rounded-full"
+                    />
+                  ) : (
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-raised text-xs">
+                      {(message.authorName ?? '?').slice(0, 1).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold">
+                        {message.authorName ?? 'Unknown'}
+                      </span>
+                      <span className="text-[11px] text-muted">
+                        {formatTime(message.createdAt)}
+                      </span>
+                    </div>
+                    <MessageBody body={message.body} />
+                    <ForthCards body={message.body} />
+                  </div>
                 </div>
-              )}
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold">
-                    {message.authorName ?? 'Unknown'}
-                  </span>
-                  <span className="text-[11px] text-slate-500">
-                    {formatTime(message.createdAt)}
-                  </span>
-                </div>
-                <MessageBody body={message.body} />
-                <ForthCards body={message.body} />
-              </div>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={send} className="border-t border-slate-800 px-5 py-3">
-        {error && <p className="pb-2 text-xs text-red-400">{error}</p>}
-        <div className="flex gap-2">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`Message ${title}`}
-            className="flex-1 rounded-lg border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={sending || !draft.trim()}
-            className="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Send
-          </button>
+      {readOnly ? (
+        <div className="border-t border-line px-5 py-4 text-center text-sm text-muted">
+          🔒 {readOnlyReason ?? 'This channel is read-only.'}
         </div>
-        <p className="pt-1.5 text-[11px] text-slate-500">
-          Paste a Forth link to attach the board item to this conversation.
-        </p>
-      </form>
+      ) : (
+        <form onSubmit={send} className="border-t border-line px-5 py-3">
+          {error && <p className="pb-2 text-xs text-red-500">{error}</p>}
+          <div className="flex gap-2">
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={`Message ${title}`}
+              className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={sending || !draft.trim()}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Send
+            </button>
+          </div>
+          <p className="pt-1.5 text-[11px] text-muted">
+            Paste a Forth link to attach the board item to this conversation.
+          </p>
+        </form>
+      )}
     </>
   )
 }

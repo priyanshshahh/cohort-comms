@@ -1,21 +1,57 @@
 @import "tailwindcss";
 
-/* The app commits to a dark chat UI, so the palette is fixed rather than
-   following the OS colour scheme. */
+/* Theme is driven by a `.dark` class on <html>, set before paint by an inline
+   script in the root layout, so there is no flash of the wrong theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic tokens. Components reference these (bg-app, text-body, …) so a
+   single palette swap re-themes the whole product. */
 :root {
-  --background: #020617; /* slate-950 */
-  --foreground: #f1f5f9; /* slate-100 */
+  --app: #ffffff;
+  --panel: #f8fafc;
+  --raised: #f1f5f9;
+  --line: #e2e8f0;
+  --body: #0f172a;
+  --muted: #64748b;
+  --accent: #4f46e5;
+  --accent-soft: #eef2ff;
+  --pm: #b45309;
+  --pm-soft: #fffbeb;
+  --pm-line: #fcd34d;
+}
+
+.dark {
+  --app: #020617;
+  --panel: #0b1220;
+  --raised: #1e293b;
+  --line: #1e293b;
+  --body: #f1f5f9;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-soft: #1e1b4b;
+  --pm: #fcd34d;
+  --pm-soft: rgba(245, 158, 11, 0.1);
+  --pm-line: rgba(245, 158, 11, 0.3);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-app: var(--app);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-line: var(--line);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-pm: var(--pm);
+  --color-pm-soft: var(--pm-soft);
+  --color-pm-line: var(--pm-line);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--app);
+  color: var(--body);
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }

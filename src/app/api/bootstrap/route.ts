@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   dmKeyFor,
+  isAdminHandle,
   listChannels,
   listMembers,
   syncCurrentUser,
@@ -23,14 +24,19 @@ export async function GET() {
     unreadByScope(me.id),
   ])
 
+  const isAdmin = isAdminHandle(me.handle)
+
   return NextResponse.json({
-    me,
-    channels: channelRows.map((c) => ({
-      slug: c.slug,
-      name: c.name,
-      description: c.description,
-      unread: unread[`channel:${c.slug}`] ?? 0,
-    })),
+    me: { ...me, isAdmin },
+    channels: channelRows
+      .filter((c) => !c.archived)
+      .map((c) => ({
+        slug: c.slug,
+        name: c.name,
+        description: c.description,
+        adminOnly: c.adminOnly,
+        unread: unread[`channel:${c.slug}`] ?? 0,
+      })),
     members: memberRows.map((m) => ({
       id: m.id,
       handle: m.handle,
