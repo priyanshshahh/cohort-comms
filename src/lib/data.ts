@@ -1,7 +1,17 @@
 import { auth, currentUser } from '@clerk/nextjs/server'
-import { and, asc, desc, eq, ilike, isNotNull, like, or } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  like,
+  or,
+} from 'drizzle-orm'
 import { getDb } from '@/db'
-import { channels, messages, reads, users } from '@/db/schema'
+import { channels, messages, reactions, reads, users } from '@/db/schema'
 
 /** Channels every cohort member lands in, created on first boot. */
 export const DEFAULT_CHANNELS = [
@@ -267,6 +277,99 @@ export async function unreadByScope(meId: string) {
   }
 
   return counts
+}
+
+/** Reactions for a set of messages, grouped per message and emoji. */
+export async function reactionsFor(messageIds: number[], meId: string) {
+  if (messageIds.length === 0) return {}
+  const db = getDb()
+  const rows = await db
+    .select()
+    .from(reactions)
+    .where(inArray(reactions.messageId, messageIds))
+
+  const grouped: Record<
+    number,
+    { emoji: string; count: number; mine: boolean }[]
+  > = {}
+
+  for (const row of rows) {
+    const list = (grouped[row.messageId] ??= [])
+    const existing = list.find((r) => r.emoji === row.emoji)
+    if (existing) {
+      existing.count += 1
+      existing.mine ||= row.userId === meId
+    } else {
+      list.push({ emoji: row.emoji, count: 1, mine: row.userId === meId })
+    }
+  }
+  return grouped
+}
+
+/** Add the reaction, or remove it if this user already reacted with it. */
+export async function toggleReaction(
+  messageId: number,
+  meId: string,
+  emoji: string
+) {
+  const db = getDb()
+  const [existing] = await db
+    .select()
+    .from(reactions)
+    .where(
+      and(
+        eq(reactions.messageId, messageId),
+        eq(reactions.userId, meId),
+        eq(reactions.emoji, emoji)
+      )
+    )
+    .limit(1)
+
+  if (existing) {
+    await db.delete(reactions).where(eq(reactions.id, existing.id))
+    return { active: false }
+  }
+
+  await db.insert(reactions).values({ messageId, userId: meId, emoji })
+  return { active: true }
+}
+
+/**
+ * Identity used for messages delivered by the Forth webhook, so board events
+ * are attributable rather than appearing to come from a person.
+ */
+export const FORTH_BOT_ID = 'forth-bot'
+
+export async function ensureForthBot() {
+  const db = getDb()
+  await db
+    .insert(users)
+    .values({
+      id: FORTH_BOT_ID,
+      handle: 'forth',
+      name: 'Forth',
+      avatarUrl: null,
+    })
+    .onConflictDoNothing()
+}
+
+/** Post an inbound board event into a channel as the Forth bot. */
+export async function postFromForth(slug: string, body: string) {
+  const db = getDb()
+  await ensureForthBot()
+
+  const [channel] = await db
+    .select()
+    .from(channels)
+    .where(eq(channels.slug, slug))
+    .limit(1)
+  if (!channel) throw new Error(`channel #${slug} not found`)
+
+  const [row] = await db
+    .insert(messages)
+    .values({ channelId: channel.id, authorId: FORTH_BOT_ID, body })
+    .returning()
+  return row
 }
 
 /**

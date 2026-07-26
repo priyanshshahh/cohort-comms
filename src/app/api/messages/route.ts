@@ -4,6 +4,7 @@ import {
   markRead,
   parseScope,
   postMessage,
+  reactionsFor,
   requireUserId,
 } from '@/lib/data'
 
@@ -24,12 +25,19 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = await listMessages(scope, meId)
+  const grouped = await reactionsFor(
+    rows.map((r) => r.id),
+    meId
+  )
 
   // Reading the conversation clears its unread badge.
   const newest = rows.at(-1)
   if (newest) await markRead(scope, meId, newest.id)
 
-  return NextResponse.json({ messages: rows })
+  return NextResponse.json({
+    messages: rows.map((r) => ({ ...r, reactions: grouped[r.id] ?? [] })),
+    meId,
+  })
 }
 
 /** POST /api/messages — send to a channel or DM. */

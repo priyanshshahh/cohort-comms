@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { extractForthLinks } from '@/lib/forth'
 
+type Reaction = { emoji: string; count: number; mine: boolean }
+
 type ChatMessage = {
   id: number
   body: string
@@ -12,7 +14,11 @@ type ChatMessage = {
   authorName: string | null
   authorHandle: string | null
   authorAvatar: string | null
+  reactions: Reaction[]
 }
+
+/** Reaction palette, mirrored by the allow-list in /api/reactions. */
+const EMOJI = ['👍', '🎉', '🔥', '👀', '✅', '❤️']
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
@@ -114,6 +120,15 @@ export default function ChatView({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
+  async function react(messageId: number, emoji: string) {
+    await fetch('/api/reactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, emoji }),
+    })
+    mutate()
+  }
+
   async function send(event: React.FormEvent) {
     event.preventDefault()
     const body = draft.trim()
@@ -196,6 +211,41 @@ export default function ChatView({
                     </div>
                     <MessageBody body={message.body} />
                     <ForthCards body={message.body} />
+
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {message.reactions?.map((reaction) => (
+                        <button
+                          key={reaction.emoji}
+                          onClick={() => react(message.id, reaction.emoji)}
+                          className={`rounded-full border px-2 py-0.5 text-xs ${
+                            reaction.mine
+                              ? 'border-accent bg-accent-soft'
+                              : 'border-line hover:bg-raised'
+                          }`}
+                        >
+                          {reaction.emoji} {reaction.count}
+                        </button>
+                      ))}
+                      <div className="group relative">
+                        <button
+                          aria-label="Add reaction"
+                          className="rounded-full border border-line px-2 py-0.5 text-xs text-muted opacity-0 transition hover:bg-raised focus:opacity-100 group-hover:opacity-100"
+                        >
+                          ☺+
+                        </button>
+                        <div className="absolute bottom-full left-0 z-10 mb-1 hidden gap-0.5 rounded-lg border border-line bg-panel p-1 shadow-lg group-focus-within:flex group-hover:flex">
+                          {EMOJI.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => react(message.id, emoji)}
+                              className="rounded px-1.5 py-0.5 text-sm hover:bg-raised"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </li>

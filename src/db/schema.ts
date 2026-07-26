@@ -73,6 +73,19 @@ export const reads = pgTable(
   (t) => [uniqueIndex('reads_user_scope_idx').on(t.userId, t.scope)]
 )
 
+/** Emoji reactions. One row per (message, user, emoji). */
+export const reactions = pgTable(
+  'reactions',
+  {
+    id: serial('id').primaryKey(),
+    messageId: integer('message_id').notNull(),
+    userId: text('user_id').notNull(),
+    emoji: text('emoji').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('reactions_unique_idx').on(t.messageId, t.userId, t.emoji)]
+)
+
 export type User = typeof users.$inferSelect
 export type Channel = typeof channels.$inferSelect
 export type Message = typeof messages.$inferSelect
