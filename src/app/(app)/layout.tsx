@@ -1,3 +1,4 @@
+import { ClerkProvider } from '@clerk/nextjs'
 import Shell from '@/components/Shell'
 import { ensureSeedChannels, syncCurrentUser } from '@/lib/data'
 
@@ -13,5 +14,9 @@ export default async function AppLayout({
   await ensureSeedChannels()
   await syncCurrentUser()
 
-  return <Shell>{children}</Shell>
+  return (
+    <ClerkProvider>
+      <Shell>{children}</Shell>
+    </ClerkProvider>
+  )
 }

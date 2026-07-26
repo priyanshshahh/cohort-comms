@@ -82,8 +82,8 @@ function ForthCards({ body }: { body: string }) {
         >
           <span aria-hidden>⚒</span>
           <span className="font-semibold">{link.label}</span>
-          <span className="truncate opacity-70">{link.url}</span>
-          <span className="ml-auto shrink-0 opacity-70">Open ↗</span>
+          <span className="truncate">{link.url}</span>
+          <span className="ml-auto shrink-0">Open ↗</span>
         </a>
       ))}
     </div>

@@ -202,7 +202,7 @@ function ForthCards({ body }: { body: string }) {
           className="flex items-center gap-2 rounded-lg border border-pm-line bg-pm-soft px-3 py-2 text-xs text-pm hover:brightness-110"
         >
           <span className="font-semibold">{link.label}</span>
-          <span className="ml-auto shrink-0 opacity-70">Open ↗</span>
+          <span className="ml-auto shrink-0">Open ↗</span>
         </a>
       ))}
     </div>
@@ -356,7 +356,7 @@ export default function DemoWorkspace() {
               <button
                 onClick={() => setTourDismissed(true)}
                 className="rounded-md border border-line px-2 py-1 text-[11px] text-muted hover:bg-raised hover:text-body"
-                aria-label="Dismiss tour"
+                
               >
                 Skip
               </button>

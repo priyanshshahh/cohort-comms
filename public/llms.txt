@@ -6,10 +6,13 @@
 > presence, and light/dark themes — with the Forth project board embedded in
 > the app and a live inbound webhook from Forth.
 
-- Production: https://cohort-comms-phi.vercel.app
-- Demo (no signup): https://cohort-comms-phi.vercel.app/demo
-- Source: https://github.com/priyanshshahh/cohort-comms
-- Author: @priyanshshahh
+## Links
+
+- [Production app](https://cohort-comms-phi.vercel.app): sign in to the live cohort workspace.
+- [Interactive demo](https://cohort-comms-phi.vercel.app/demo): no account required.
+- [Source code](https://github.com/priyanshshahh/cohort-comms): Next.js 16 app, MIT.
+- [Forth project board](https://forth-bice.vercel.app): the PM platform this integrates with.
+- [Submission pull request](https://github.com/rogerSuperBuilderAlpha/hult-cohort-program/pull/118): cohort record.
 
 ## Stack
 
