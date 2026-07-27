@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import {
+  ForbiddenError,
   latestMessageId,
   parseScope,
   requireUserId,
@@ -28,6 +29,18 @@ export async function GET(request: NextRequest) {
 
   let lastId = Number(request.nextUrl.searchParams.get('after') ?? '0')
   if (!Number.isFinite(lastId) || lastId < 0) lastId = 0
+
+  // Authorize before opening the stream. Checking here rather than inside the
+  // loop means an unauthorized probe gets a plain 403 instead of holding a
+  // 25-second serverless invocation open only to be told nothing.
+  try {
+    await latestMessageId(scope, meId)
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return new Response(error.message, { status: 403 })
+    }
+    throw error
+  }
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream({

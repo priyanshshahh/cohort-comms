@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { extractForthLinks, FORTH_BASE_URL } from '../src/lib/forth'
-import { dmKeyFor, isAdminHandle, parseScope, scopeKey } from '../src/lib/data'
+import {
+  extractForthLinks,
+  FORTH_BASE_URL,
+  stripNonForthUrls,
+} from '../src/lib/forth'
+import {
+  assertThreadRootReadable,
+  dmKeyFor,
+  ForbiddenError,
+  isAdminHandle,
+  parseScope,
+  scopeKey,
+} from '../src/lib/data'
 
 /**
  * Adversarial tests, named by the attack they prevent rather than by the
@@ -99,5 +110,90 @@ describe('conversation scoping', () => {
     const b = scopeKey({ kind: 'dm', otherUserId: 'user_a' }, 'user_b')
     expect(a).toBe(b)
     expect(a).not.toBe(scopeKey({ kind: 'dm', otherUserId: 'user_c' }, 'user_a'))
+  })
+})
+
+/**
+ * Reported independently by @gge513 (#5) and @zukhriddingit (#7): the thread
+ * branch of `listMessages` selected by message id with no participation check,
+ * so any signed-in account could enumerate the serial primary key and read
+ * every DM in the cohort. The write path had the guard; the read path did not.
+ *
+ * Three users, as the review asked for: `alice` and `bob` share a DM, `mallory`
+ * is a signed-in stranger.
+ */
+describe('DM thread read authorization', () => {
+  const alice = 'user_alice'
+  const bob = 'user_bob'
+  const mallory = 'user_mallory'
+  const dmRoot = { parentId: null, dmKey: dmKeyFor(alice, bob) }
+
+  it('lets each participant read their own DM thread', () => {
+    expect(() => assertThreadRootReadable(dmRoot, alice)).not.toThrow()
+    expect(() => assertThreadRootReadable(dmRoot, bob)).not.toThrow()
+  })
+
+  it('refuses a non-participant reading a DM root by id', () => {
+    expect(() => assertThreadRootReadable(dmRoot, mallory)).toThrow(
+      ForbiddenError
+    )
+  })
+
+  it('refuses a reply id, which would leak the whole sibling set', () => {
+    const reply = { parentId: 41, dmKey: dmKeyFor(alice, bob) }
+    expect(() => assertThreadRootReadable(reply, alice)).toThrow(ForbiddenError)
+  })
+
+  it('refuses an id that matches no message', () => {
+    expect(() => assertThreadRootReadable(null, alice)).toThrow(ForbiddenError)
+    expect(() => assertThreadRootReadable(undefined, alice)).toThrow(
+      ForbiddenError
+    )
+  })
+
+  it('still allows any member into a channel thread', () => {
+    // Channel threads carry no dmKey; they are cohort-wide by design.
+    expect(() =>
+      assertThreadRootReadable({ parentId: null, dmKey: null }, mallory)
+    ).not.toThrow()
+  })
+
+  it('does not grant access by handle substring inside the dm key', () => {
+    // `user_alice` must not unlock a thread belonging to `user_alice2`.
+    const other = { parentId: null, dmKey: dmKeyFor('user_alice2', bob) }
+    expect(() => assertThreadRootReadable(other, alice)).toThrow(ForbiddenError)
+  })
+})
+
+/**
+ * Reported by @gge513 (#5): only `ticket.url` went through the Forth URL
+ * policy. `ticket.title` (and, unreported, `status` and `assignee`) are
+ * interpolated into the body, and the renderer auto-links bare URLs, so a
+ * hostile link parked in a text field rendered as a live link wearing the
+ * Forth bot's identity.
+ */
+describe('webhook free-text URL sanitization', () => {
+  it('defangs a hostile URL hidden in a ticket title', () => {
+    const out = stripNonForthUrls('Fix login https://evil.example.com/phish')
+    expect(out).not.toContain('evil.example.com')
+    expect(out).toContain('[link removed]')
+  })
+
+  it('defangs a lookalike Forth domain', () => {
+    expect(
+      stripNonForthUrls('https://forth-bice.vercel.app.evil.com/x')
+    ).not.toContain('evil.com/x')
+  })
+
+  it('keeps a genuine Forth link intact', () => {
+    expect(stripNonForthUrls(`See ${FORTH_BASE_URL}/board`)).toContain(
+      FORTH_BASE_URL
+    )
+  })
+
+  it('leaves text with no URLs untouched', () => {
+    expect(stripNonForthUrls('Shipped the login fix')).toBe(
+      'Shipped the login fix'
+    )
   })
 })

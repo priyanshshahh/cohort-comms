@@ -63,6 +63,25 @@ export function normalizeForthUrl(raw: string): ForthLink | null {
 }
 
 /**
+ * Defang every non-Forth URL in a string, keeping genuine Forth links.
+ *
+ * Webhook payloads carry free text (title, status, assignee) that we
+ * interpolate into a message body, and the renderer auto-links any bare URL it
+ * finds. Sanitizing only `ticket.url` therefore left a hole: a sender holding
+ * the shared secret could park a phishing link in `ticket.title` and have it
+ * render as a live link wearing the Forth bot's identity. Anything that is not
+ * Forth is replaced rather than dropped, so the message still reads honestly.
+ */
+export function stripNonForthUrls(text: string): string {
+  return text.replace(/https?:\/\/[^\s<>()]+/g, (raw) => {
+    const trailing = raw.match(/[.,;:]+$/)?.[0] ?? ''
+    const bare = trailing ? raw.slice(0, -trailing.length) : raw
+    const link = normalizeForthUrl(bare)
+    return (link ? link.url : '[link removed]') + trailing
+  })
+}
+
+/**
  * Pull every Forth URL out of a message body, for rendering ticket cards
  * beneath the message text.
  */

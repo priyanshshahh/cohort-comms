@@ -79,6 +79,62 @@ export async function requireUserId(): Promise<string> {
 }
 
 /**
+ * Raised when an authenticated caller asks for a conversation they are not a
+ * participant in. Distinct from a plain Error so routes can answer 403 rather
+ * than folding it into a generic 400.
+ */
+export class ForbiddenError extends Error {
+  constructor(message = 'not a participant in this conversation') {
+    super(message)
+    this.name = 'ForbiddenError'
+  }
+}
+
+/** The subset of a message row the thread-read decision depends on. */
+export type ThreadRootRef = {
+  parentId: number | null
+  dmKey: string | null
+} | null | undefined
+
+/**
+ * The authorization decision for reading a thread, as a pure function so it
+ * can be tested exhaustively without a database.
+ *
+ * A thread scope is only a message id, and ids are a serial primary key, so
+ * without this check any signed-in account could walk the id space and read
+ * every DM in the cohort. `postMessage` guarded its thread branch from the
+ * start; the read paths did not, and the test suite stayed green because its
+ * coverage stopped at pure functions. Keeping the rule pure is what lets the
+ * tests reach it.
+ *
+ * Rejecting a non-root id matters as much as the DM check: addressing a reply
+ * would otherwise return that reply's entire sibling set.
+ */
+export function assertThreadRootReadable(
+  root: ThreadRootRef,
+  meId: string
+): void {
+  if (!root) throw new ForbiddenError('thread not found')
+  if (root.parentId) throw new ForbiddenError('not a thread root')
+  if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
+    throw new ForbiddenError()
+  }
+}
+
+/** Load a thread root and prove the caller is allowed to read it. */
+async function requireReadableThreadRoot(rootId: number, meId: string) {
+  const db = getDb()
+  const [root] = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.id, rootId))
+    .limit(1)
+
+  assertThreadRootReadable(root, meId)
+  return root
+}
+
+/**
  * Mirror the signed-in Clerk user into our `users` table and refresh their
  * presence timestamp. Clerk remains the identity source of truth; this row
  * exists so we can join author details onto messages cheaply.
@@ -192,6 +248,9 @@ export async function listMessages(scope: Scope, meId: string) {
   const db = getDb()
 
   if (scope.kind === 'thread') {
+    // Throws unless this caller may read the root's conversation.
+    await requireReadableThreadRoot(scope.rootId, meId)
+
     // The root message first, then its replies in order.
     const rows = await db
       .select(MESSAGE_FIELDS)
@@ -261,18 +320,9 @@ export async function postMessage(
 
   if (scope.kind === 'thread') {
     // A reply inherits the root's conversation so it stays searchable and
-    // stays inside the same channel or DM.
-    const [root] = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.id, scope.rootId))
-      .limit(1)
-    if (!root) throw new Error('thread not found')
-    if (root.parentId) throw new Error('replies cannot be nested further')
-
-    if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
-      throw new Error('not a participant in this conversation')
-    }
+    // stays inside the same channel or DM. Reuses the same gate as the read
+    // paths, so read and write authorization can never drift apart again.
+    const root = await requireReadableThreadRoot(scope.rootId, meId)
 
     ;[row] = await db
       .insert(messages)
@@ -334,6 +384,10 @@ export async function latestMessageId(scope: Scope, meId: string) {
   const db = getDb()
 
   if (scope.kind === 'thread') {
+    // Same gate as the read path, so /api/events cannot be used as a side
+    // channel to watch a stranger's DM for activity.
+    await requireReadableThreadRoot(scope.rootId, meId)
+
     const [row] = await db
       .select({ id: max(messages.id) })
       .from(messages)

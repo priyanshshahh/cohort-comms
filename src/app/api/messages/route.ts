@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  ForbiddenError,
   listMessages,
   markRead,
   parseScope,
@@ -24,7 +25,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'invalid scope' }, { status: 400 })
   }
 
-  const rows = await listMessages(scope, meId)
+  let rows: Awaited<ReturnType<typeof listMessages>>
+  try {
+    rows = await listMessages(scope, meId)
+  } catch (error) {
+    // Answer 403 loudly rather than returning an empty list, so a probe of
+    // someone else's conversation is unambiguous in the logs.
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
+    throw error
+  }
+
   const grouped = await reactionsFor(
     rows.map((r) => r.id),
     meId
@@ -70,6 +82,9 @@ export async function POST(request: NextRequest) {
     if (row) await markRead(scope, meId, row.id)
     return NextResponse.json({ message: row }, { status: 201 })
   } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return NextResponse.json({ error: error.message }, { status: 403 })
+    }
     const reason = error instanceof Error ? error.message : 'send failed'
     return NextResponse.json({ error: reason }, { status: 400 })
   }
