@@ -12,7 +12,7 @@ import {
   parseEmailList,
   parseScope,
   scopeKey,
-} from '../src/lib/data'
+} from '../src/lib/policy'
 
 /**
  * Adversarial tests, named by the attack they prevent rather than by the

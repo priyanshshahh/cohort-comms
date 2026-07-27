@@ -35,7 +35,7 @@ Sign in at the production URL for the real workspace (SSE live updates,
 | Typing indicators | Who is composing in the current conversation |
 | Catch me up | Skim of recent others’ messages when opening a busy channel |
 | Light / dark | Theme toggle (`localStorage` + `.dark`) |
-| Interactive `/demo` | Full walkthrough without Clerk |
+| Interactive `/demo` | Full walkthrough without signing in |
 | Forth board embed | Split-pane iframe beside chat (default open) |
 | Forth deep-link cards | Pasted `forth-bice.vercel.app` URLs → labelled cards |
 | Forth inbound webhook | Receiver live; Forth does **not** send outbound events yet |
@@ -54,21 +54,26 @@ Sign in at the production URL for the real workspace (SSE live updates,
 | Concern | Choice |
 |---|---|
 | Framework | Next.js 16.2 (App Router), React 19 |
-| Auth | Clerk (`@clerk/nextjs` v7) — Marketplace instance |
+| Auth | Auth.js v5 (`next-auth`) with GitHub OAuth |
 | Database | Neon Postgres via Drizzle ORM |
 | Realtime | SSE (`/api/events`) + SWR fallback while the stream is down |
 | Uploads | `@vercel/blob` (optional) |
 | Hosting | Vercel |
 | Tests | Vitest (`npm test`) |
 
-Clerk and Neon are provisioned through the Vercel Marketplace.
+Neon is provisioned through the Vercel Marketplace. Auth is a GitHub OAuth app.
 
 ### Auth note
 
-The live deploy currently uses a **Clerk development** instance (`pk_test_…`)
-because `*.vercel.app` cannot satisfy production Clerk DNS. The UI may show a
-“Development mode” badge. Enable social providers in the Clerk dashboard
-(Google is typical; add GitHub there if you need both).
+Auth is a **production** deployment. Auth.js with a GitHub OAuth app has no
+DNS requirement, so it runs as real production auth on `*.vercel.app` with no
+custom domain, no "development mode" badge, and no user cap. The previous
+Clerk setup could not: Clerk production instances need DNS records on a domain
+you control.
+
+Access is limited to the cohort. Emails on the roster (`cohort_allowlist`) are
+admitted automatically at first sign-in; everyone else waits on the approval
+screen until an admin admits them at `/admin`.
 
 ### Realtime (SSE + SWR)
 
@@ -83,7 +88,7 @@ polling. Sidebar bootstrap refreshes ~5s; notification bell ~4s.
 |---|---|---|
 | `/` | Public | Landing; signed-in users redirect to `/c/general` |
 | `/demo` | Public | Interactive local-only walkthrough |
-| `/sign-in`, `/sign-up` | Public | Clerk |
+| `/sign-in` | Public | Auth.js |
 | `/c/[slug]` | Required | Channel chat |
 | `/dm/[userId]` | Required | 1:1 DM |
 | `/robots.txt`, `/sitemap.xml`, `/llms.txt` | Public | SEO / agent summary |
@@ -93,7 +98,7 @@ Auth gate: `src/proxy.ts` (Next.js 16 Proxy). Public routes above plus
 
 ## API
 
-Authenticated APIs use Clerk (`requireUserId` / `syncCurrentUser`) except the
+Authenticated APIs use `requireUserId` / `syncCurrentUser` except the
 Forth webhook.
 
 | Method | Path | Purpose |
@@ -117,7 +122,7 @@ Forth webhook.
 | | `/demo` | Signed-in workspace |
 |---|---|---|
 | Data | In-memory React state | Neon Postgres |
-| Auth | None | Clerk |
+| Auth | None | GitHub OAuth |
 | Forth webhook | Seeded bot message + amber badge | Real `POST /api/webhooks/forth` → DB |
 | Realtime | None | SSE + SWR |
 | Notifications / typing / upload / FTS | Simulated or absent | Full APIs |
@@ -130,8 +135,9 @@ Copy `.env.example` → `.env.local` (or `vercel env pull`).
 | Variable | Required | Purpose |
 |---|---|---|
 | `DATABASE_URL` | Yes | Neon connection string |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key |
-| `CLERK_SECRET_KEY` | Yes | Clerk secret |
+| `AUTH_SECRET` | Yes | Auth.js session secret (`npx auth secret`) |
+| `AUTH_GITHUB_ID` | Yes | GitHub OAuth app client id |
+| `AUTH_GITHUB_SECRET` | Yes | GitHub OAuth app client secret |
 | `FORTH_WEBHOOK_SECRET` | For webhook | Missing → webhook returns `503` |
 | `BLOB_READ_WRITE_TOKEN` | Optional | Vercel Blob uploads; else data URL |
 | `ADMIN_HANDLES` | Optional | Comma-separated handles; default `admin,priyanshshahh` |
@@ -158,7 +164,7 @@ on push/PR to `main`.
 
 ```
 src/
-  proxy.ts                      Clerk gate; public /, /demo, webhook, SEO
+  proxy.ts                      Auth gate; public /, /demo, webhook, SEO
   db/schema.ts                  users, channels, messages, reads, notifications,
                                 typing, reactions
   lib/data.ts                   scopes, posts, unread, FTS, Forth bot, admins
@@ -245,7 +251,7 @@ server-side; client views are React state.
 
 ### 4. Shared identity
 
-Sign in with the same email / OAuth you use on Forth (Clerk on Comms;
+Sign in with the same GitHub account you use on Forth (
 Google/GitHub on Forth). That is the curriculum’s cross-tool identity story,
 not a technical SSO link.
 

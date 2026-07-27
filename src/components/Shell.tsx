@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import useSWR from 'swr'
-import { UserButton } from '@clerk/nextjs'
+import SignOut from './SignOut'
 import ThemeToggle from './ThemeToggle'
 import NotificationBell from './NotificationBell'
 import dynamic from 'next/dynamic'
@@ -32,7 +32,7 @@ type Member = {
 }
 
 type Bootstrap = {
-  me: { id: string; handle: string; name: string; isAdmin: boolean }
+  me: { id: string; handle: string; name: string; isAdmin: boolean; avatarUrl: string | null }
   channels: Channel[]
   members: Member[]
 }
@@ -171,7 +171,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="ml-auto flex items-center gap-2">
           <NotificationBell />
           <ThemeToggle />
-          <UserButton />
+          <SignOut name={me?.name ?? 'Member'} avatarUrl={me?.avatarUrl ?? null} />
         </div>
       </header>
 
@@ -196,7 +196,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             )}
             <NotificationBell />
             <ThemeToggle />
-            <UserButton />
+            <SignOut name={me?.name ?? 'Member'} avatarUrl={me?.avatarUrl ?? null} />
           </div>
         </div>
 

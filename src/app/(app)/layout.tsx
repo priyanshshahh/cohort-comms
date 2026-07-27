@@ -1,4 +1,3 @@
-import { ClerkProvider } from '@clerk/nextjs'
 import PendingApproval from '@/components/PendingApproval'
 import Shell from '@/components/Shell'
 import { ensureSeedChannels, syncCurrentUser } from '@/lib/data'
@@ -23,16 +22,8 @@ export default async function AppLayout({
   // screen instead of the workspace, so no channel, roster or message ever
   // renders for them. The API routes enforce the same rule independently.
   if (member && member.status !== 'active') {
-    return (
-      <ClerkProvider>
-        <PendingApproval name={member.name} email={member.email} />
-      </ClerkProvider>
-    )
+    return <PendingApproval name={member.name} email={member.email} />
   }
 
-  return (
-    <ClerkProvider>
-      <Shell>{children}</Shell>
-    </ClerkProvider>
-  )
+  return <Shell>{children}</Shell>
 }

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { auth } from '@clerk/nextjs/server'
+import { auth } from '@/auth'
 import { FORTH_BASE_URL } from '@/lib/forth'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +27,7 @@ const PATH = [
 ]
 
 export default async function Landing() {
-  const { userId } = await auth()
+  const userId = (await auth())?.user?.id
   if (userId) redirect('/c/general')
 
   return (

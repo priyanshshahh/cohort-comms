@@ -12,8 +12,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          # Node 24 LTS, matching Vercel's current default runtime. On 22 the
+          # runner shipped npm 10, which cannot reconcile a lockfile written
+          # by npm 11, so npm ci failed here while succeeding everywhere else.
+          node-version: '24'
           cache: npm
+      - run: node scripts/fix-lockfile.mjs
       - run: npm ci
       - run: npm test
       - run: npx tsc --noEmit
