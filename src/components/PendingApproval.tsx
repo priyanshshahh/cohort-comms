@@ -1,4 +1,4 @@
-import { SignOutButton } from '@clerk/nextjs'
+import { signOut } from '@/auth'
 import { FORTH_BASE_URL } from '@/lib/forth'
 
 /**
@@ -40,11 +40,19 @@ export default function PendingApproval({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <SignOutButton>
-          <button className="rounded-md border border-[var(--border)] px-3 py-2 font-medium hover:bg-[var(--surface-2)]">
+        <form
+          action={async () => {
+            'use server'
+            await signOut({ redirectTo: '/' })
+          }}
+        >
+          <button
+            type="submit"
+            className="rounded-md border border-[var(--border)] px-3 py-2 font-medium hover:bg-[var(--surface-2)]"
+          >
             Sign out
           </button>
-        </SignOutButton>
+        </form>
         <a
           className="rounded-md px-3 py-2 font-medium text-[var(--accent)] hover:underline"
           href="/demo"

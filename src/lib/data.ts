@@ -1,4 +1,4 @@
-import { auth, currentUser } from '@clerk/nextjs/server'
+import { auth } from '@/auth'
 import {
   and,
   asc,
@@ -16,6 +16,20 @@ import {
   sql,
 } from 'drizzle-orm'
 import { getDb } from '@/db'
+export * from './policy'
+import {
+  adminHandles,
+  assertThreadRootReadable,
+  dmKeyFor,
+  ForbiddenError,
+  isAdminHandle,
+  parseEmailList,
+  parseScope,
+  PendingApprovalError,
+  scopeKey,
+  type Scope,
+  type ThreadRootRef,
+} from './policy'
 import {
   channels,
   cohortAllowlist,
@@ -65,25 +79,11 @@ export const DEFAULT_CHANNELS = [
 /** Cap on the history scanned for unread badges. */
 const UNREAD_SCAN_LIMIT = 2000
 
-/**
- * Cohort admins, by handle. Configurable per deployment so the winning
- * platform can hand posting rights to staff without a code change.
- */
-export function adminHandles(): string[] {
-  return (process.env.ADMIN_HANDLES ?? 'admin,priyanshshahh')
-    .split(',')
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean)
-}
 
-export function isAdminHandle(handle: string | null | undefined): boolean {
-  if (!handle) return false
-  return adminHandles().includes(handle.toLowerCase())
-}
-
-/** The signed-in Clerk id, with no cohort membership check. */
+/** The signed-in member's id, with no cohort membership check. */
 export async function requireSignedInUserId(): Promise<string> {
-  const { userId } = await auth()
+  const session = await auth()
+  const userId = session?.user?.id
   if (!userId) throw new Error('unauthorized')
   return userId
 }
@@ -109,14 +109,6 @@ export async function requireUserId(): Promise<string> {
 
   if (row?.status !== 'active') throw new PendingApprovalError()
   return userId
-}
-
-/** Raised when a signed-in account has not yet been admitted to the cohort. */
-export class PendingApprovalError extends Error {
-  constructor(message = 'awaiting cohort approval') {
-    super(message)
-    this.name = 'PendingApprovalError'
-  }
 }
 
 /** The signed-in member's row, or null before they have been synced. */
@@ -149,49 +141,6 @@ export async function requireAdminId(): Promise<string> {
   return userId
 }
 
-/**
- * Raised when an authenticated caller asks for a conversation they are not a
- * participant in. Distinct from a plain Error so routes can answer 403 rather
- * than folding it into a generic 400.
- */
-export class ForbiddenError extends Error {
-  constructor(message = 'not a participant in this conversation') {
-    super(message)
-    this.name = 'ForbiddenError'
-  }
-}
-
-/** The subset of a message row the thread-read decision depends on. */
-export type ThreadRootRef = {
-  parentId: number | null
-  dmKey: string | null
-} | null | undefined
-
-/**
- * The authorization decision for reading a thread, as a pure function so it
- * can be tested exhaustively without a database.
- *
- * A thread scope is only a message id, and ids are a serial primary key, so
- * without this check any signed-in account could walk the id space and read
- * every DM in the cohort. `postMessage` guarded its thread branch from the
- * start; the read paths did not, and the test suite stayed green because its
- * coverage stopped at pure functions. Keeping the rule pure is what lets the
- * tests reach it.
- *
- * Rejecting a non-root id matters as much as the DM check: addressing a reply
- * would otherwise return that reply's entire sibling set.
- */
-export function assertThreadRootReadable(
-  root: ThreadRootRef,
-  meId: string
-): void {
-  if (!root) throw new ForbiddenError('thread not found')
-  if (root.parentId) throw new ForbiddenError('not a thread root')
-  if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
-    throw new ForbiddenError()
-  }
-}
-
 /** Load a thread root and prove the caller is allowed to read it. */
 async function requireReadableThreadRoot(rootId: number, meId: string) {
   const db = getDb()
@@ -211,22 +160,15 @@ async function requireReadableThreadRoot(rootId: number, meId: string) {
  * exists so we can join author details onto messages cheaply.
  */
 export async function syncCurrentUser() {
-  const user = await currentUser()
-  if (!user) return null
+  const session = await auth()
+  const user = session?.user
+  if (!user?.id) return null
 
-  const githubAccount = user.externalAccounts?.find(
-    (a) => a.provider === 'oauth_github' || a.provider === 'github'
-  )
-  const handle =
-    user.username ??
-    githubAccount?.username ??
-    user.emailAddresses[0]?.emailAddress?.split('@')[0] ??
-    'member'
-  const name =
-    [user.firstName, user.lastName].filter(Boolean).join(' ') || handle
-
-  const email =
-    user.emailAddresses[0]?.emailAddress?.trim().toLowerCase() ?? null
+  // The GitHub login is the handle everywhere: admin checks, @mentions, and
+  // the identity Forth keys off, so a member is the same person in both tools.
+  const email = user.email?.trim().toLowerCase() ?? null
+  const handle = user.login ?? email?.split('@')[0] ?? 'member'
+  const name = user.name?.trim() || handle
 
   const db = getDb()
 
@@ -240,7 +182,7 @@ export async function syncCurrentUser() {
       id: user.id,
       handle,
       name,
-      avatarUrl: user.imageUrl ?? null,
+      avatarUrl: user.image ?? null,
       email,
       status: admitted ? 'active' : 'pending',
       approvedAt: admitted ? new Date() : null,
@@ -251,7 +193,7 @@ export async function syncCurrentUser() {
       set: {
         handle,
         name,
-        avatarUrl: user.imageUrl ?? null,
+        avatarUrl: user.image ?? null,
         email,
         // Promote someone who has since been added to the roster, but never
         // downgrade a member an admin admitted by hand.
@@ -265,7 +207,7 @@ export async function syncCurrentUser() {
     id: user.id,
     handle,
     name,
-    avatarUrl: user.imageUrl ?? null,
+    avatarUrl: user.image ?? null,
     email,
     status: row?.status ?? (admitted ? 'active' : 'pending'),
   }
@@ -280,22 +222,6 @@ export async function isOnAllowlist(email: string): Promise<boolean> {
     .where(eq(cohortAllowlist.email, email.trim().toLowerCase()))
     .limit(1)
   return Boolean(row)
-}
-
-/**
- * Split a pasted roster into clean, unique emails.
- * Admins paste from a spreadsheet or an email client, so accept commas,
- * newlines, semicolons and spaces rather than demanding one format.
- */
-export function parseEmailList(raw: string): string[] {
-  const seen = new Set<string>()
-  for (const piece of raw.split(/[\s,;]+/)) {
-    const email = piece.trim().toLowerCase()
-    // Deliberately permissive: a rough shape check, not RFC 5322.
-    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) continue
-    seen.add(email)
-  }
-  return [...seen]
 }
 
 /** Add emails to the roster and admit anyone already signed up under them. */
@@ -403,40 +329,6 @@ export async function revokeMember(userId: string) {
 export async function ensureSeedChannels() {
   const db = getDb()
   await db.insert(channels).values(DEFAULT_CHANNELS).onConflictDoNothing()
-}
-
-/** Stable conversation key for a pair of users, order-independent. */
-export function dmKeyFor(a: string, b: string): string {
-  return [a, b].sort().join('~')
-}
-
-export type Scope =
-  | { kind: 'channel'; slug: string }
-  | { kind: 'dm'; otherUserId: string }
-  | { kind: 'thread'; rootId: number }
-
-/** Parse `channel:general` / `dm:user_123` / `thread:42` into a typed scope. */
-export function parseScope(raw: string | null): Scope | null {
-  if (!raw) return null
-  const [kind, ...rest] = raw.split(':')
-  const value = rest.join(':')
-  if (!value) return null
-  if (kind === 'channel') return { kind: 'channel', slug: value }
-  if (kind === 'dm') return { kind: 'dm', otherUserId: value }
-  if (kind === 'thread') {
-    const rootId = Number(value)
-    return Number.isInteger(rootId) && rootId > 0
-      ? { kind: 'thread', rootId }
-      : null
-  }
-  return null
-}
-
-/** Canonical string form used as the key in the `reads` table. */
-export function scopeKey(scope: Scope, meId: string): string {
-  if (scope.kind === 'channel') return `channel:${scope.slug}`
-  if (scope.kind === 'thread') return `thread:${scope.rootId}`
-  return `dm:${dmKeyFor(meId, scope.otherUserId)}`
 }
 
 export async function listChannels() {

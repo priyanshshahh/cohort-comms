@@ -16,7 +16,7 @@
 
 ## Stack
 
-Next.js 16.2 (App Router), React 19, Clerk auth, Neon Postgres via Drizzle ORM,
+Next.js 16.2 (App Router), React 19, Auth.js v5 with GitHub OAuth, Neon Postgres via Drizzle ORM,
 optional Vercel Blob uploads, deployed on Vercel. Realtime is SSE on
 `/api/events` (poll max message id ~800ms) with SWR ~2s fallback while the
 stream is down. Sidebar bootstrap ~5s; notification bell ~4s.
@@ -47,7 +47,7 @@ Forth publishes no public REST API and no outbound webhooks. Integration:
 
 - `/` — landing (public); signed-in → `/c/general`
 - `/demo` — interactive product walkthrough, no account (public, local state)
-- `/sign-in`, `/sign-up` — Clerk (public)
+- `/sign-in` — GitHub OAuth via Auth.js (public)
 - `/c/[slug]` — channel (auth)
 - `/dm/[userId]` — 1:1 DM (auth)
 - `/api/bootstrap`, `/api/channels`, `/api/messages`, `/api/events`,
