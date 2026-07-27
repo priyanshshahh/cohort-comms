@@ -1,22 +1,40 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 
 /**
  * Light/dark switch. The initial class is applied by an inline script in the
  * root layout; this component only reflects and updates it.
+ *
+ * The DOM class is the single source of truth, read through
+ * useSyncExternalStore rather than mirrored into state by an effect. Mirroring
+ * meant the first paint always claimed dark and then corrected itself, which
+ * is both a flash and the cascading render React warns about.
  */
-export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(true)
+const themeListeners = new Set<() => void>()
 
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains('dark'))
-  }, [])
+function subscribeTheme(listener: () => void) {
+  themeListeners.add(listener)
+  return () => themeListeners.delete(listener)
+}
+
+function isDarkNow() {
+  return document.documentElement.classList.contains('dark')
+}
+
+export default function ThemeToggle() {
+  const isDark = useSyncExternalStore(
+    subscribeTheme,
+    isDarkNow,
+    // The inline script defaults to dark before hydration, so the server
+    // snapshot has to agree or the markup mismatches.
+    () => true
+  )
 
   function toggle() {
     const next = !isDark
-    setIsDark(next)
     document.documentElement.classList.toggle('dark', next)
+    for (const listener of themeListeners) listener()
     try {
       localStorage.setItem('theme', next ? 'dark' : 'light')
     } catch {

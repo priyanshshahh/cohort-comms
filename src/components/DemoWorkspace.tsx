@@ -1,6 +1,21 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+
+/** Matches the xl breakpoint where the Forth pane sits beside chat. */
+const WIDE_QUERY = '(min-width: 1280px)'
+
+function subscribeWide(onChange: () => void) {
+  const query = window.matchMedia(WIDE_QUERY)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
 import ThemeToggle from './ThemeToggle'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { motionTokens } from '@/lib/motionTokens'
@@ -238,7 +253,8 @@ function nowLabel(): string {
 
 export default function DemoWorkspace() {
   const [scope, setScope] = useState<Scope>({ kind: 'channel', slug: 'general' })
-  const [forthOpen, setForthOpen] = useState(false)
+  // null means "follow the screen size"; a boolean means the visitor chose.
+  const [forthChoice, setForthChoice] = useState<boolean | null>(null)
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState('')
   const [conversations, setConversations] = useState(SEED)
@@ -251,10 +267,28 @@ export default function DemoWorkspace() {
 
   const reduceMotion = useReducedMotion()
 
-  // Desktop: open Forth beside chat. Mobile: keep chat first (Forth is fullscreen).
-  useEffect(() => {
-    if (window.matchMedia('(min-width: 1280px)').matches) setForthOpen(true)
-  }, [])
+  /**
+   * Desktop opens Forth beside chat; mobile keeps chat first, since Forth is
+   * fullscreen there.
+   *
+   * Read as a live media query rather than set once from an effect. The effect
+   * version painted the panel closed and then opened it, which read as a jump
+   * on load, and it never noticed a window resized across the breakpoint.
+   */
+  const wideScreen = useSyncExternalStore(
+    subscribeWide,
+    () => window.matchMedia(WIDE_QUERY).matches,
+    () => false
+  )
+
+  const forthOpen = forthChoice ?? wideScreen
+  const setForthOpen = useCallback(
+    (next: boolean | ((current: boolean) => boolean)) =>
+      setForthChoice((current) =>
+        typeof next === 'function' ? next(current ?? false) : next
+      ),
+    []
+  )
 
   const key = scopeKey(scope)
   const messages = conversations[key] ?? []

@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from 'motion/react'
 import { motionTokens } from '@/lib/motionTokens'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { extractForthLinks, normalizeForthUrl } from '@/lib/forth'
 
@@ -246,7 +246,6 @@ export default function ChatView({
   readOnly = false,
   readOnlyReason,
   onOpenThread,
-  compact = false,
 }: {
   scope: string
   title: string
@@ -255,7 +254,6 @@ export default function ChatView({
   readOnlyReason?: string
   /** Opens the given root message in the thread panel. */
   onOpenThread?: (rootId: number) => void
-  compact?: boolean
 }) {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -272,10 +270,19 @@ export default function ChatView({
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
+  /**
+   * Switching conversation resets the catch-up prompt.
+   *
+   * Adjusted during render rather than in an effect: the effect version
+   * painted the new conversation once while still showing the previous one's
+   * catch-up state, then re-rendered to correct it.
+   */
+  const [lastScope, setLastScope] = useState(scope)
+  if (scope !== lastScope) {
+    setLastScope(scope)
     setCatchUpDismissed(false)
     setCatchUpOpen(false)
-  }, [scope])
+  }
 
   const key = `/api/messages?scope=${encodeURIComponent(scope)}`
   const reduceMotion = useReducedMotion()
@@ -292,7 +299,9 @@ export default function ChatView({
   const meHandle = boot?.me?.handle
   const roster = boot?.members ?? []
 
-  const messages = data?.messages ?? []
+  // Stable identity when the payload has not changed, so the day-separator
+  // memo below is not invalidated on every render by a fresh `[]`.
+  const messages = useMemo(() => data?.messages ?? [], [data?.messages])
   const catchUpBrief = messages
     .filter((m) => m.authorHandle && m.authorHandle !== meHandle)
     .slice(-6)
@@ -445,7 +454,22 @@ export default function ChatView({
     mutate()
   }
 
-  let lastDay = ''
+  /**
+   * Day separators, computed once instead of by mutating a variable while the
+   * message list renders. Reassigning across iterations made the JSX depend on
+   * render order, which breaks under re-entrant rendering and is why the
+   * compiler rejected it.
+   */
+  const rows = useMemo(
+    () =>
+      messages.map((message, index) => {
+        const day = formatDay(message.createdAt)
+        const previousDay =
+          index > 0 ? formatDay(messages[index - 1].createdAt) : ''
+        return { message, day, showDay: day !== previousDay }
+      }),
+    [messages]
+  )
 
   return (
     <>
@@ -500,10 +524,7 @@ export default function ChatView({
         )}
 
         <ul className="flex flex-col gap-3">
-          {messages.map((message) => {
-            const day = formatDay(message.createdAt)
-            const showDay = day !== lastDay
-            lastDay = day
+          {rows.map(({ message, day, showDay }) => {
             return (
               <MessageRow
                 key={message.id}
@@ -538,6 +559,7 @@ export default function ChatView({
                   key={member.handle}
                   type="button"
                   role="option"
+                  aria-selected={false}
                   onClick={() => insertMention(member.handle)}
                   className="flex w-full items-center gap-2 border-b border-line px-3 py-2 text-left text-sm last:border-0 hover:bg-raised"
                 >

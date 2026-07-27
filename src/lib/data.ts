@@ -6,11 +6,8 @@ import {
   desc,
   eq,
   gt,
-  ilike,
   inArray,
-  isNotNull,
   isNull,
-  like,
   max,
   or,
   sql,
@@ -18,18 +15,14 @@ import {
 import { getDb } from '@/db'
 export * from './policy'
 import {
-  adminHandles,
   assertThreadRootReadable,
   isAdmin,
   dmKeyFor,
   ForbiddenError,
   isAdminHandle,
-  parseEmailList,
-  parseScope,
   PendingApprovalError,
   scopeKey,
   type Scope,
-  type ThreadRootRef,
 } from './policy'
 import {
   channels,
