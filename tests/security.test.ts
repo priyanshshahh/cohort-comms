@@ -9,6 +9,7 @@ import {
   dmKeyFor,
   ForbiddenError,
   isAdminHandle,
+  parseEmailList,
   parseScope,
   scopeKey,
 } from '../src/lib/data'
@@ -195,5 +196,37 @@ describe('webhook free-text URL sanitization', () => {
     expect(stripNonForthUrls('Shipped the login fix')).toBe(
       'Shipped the login fix'
     )
+  })
+})
+
+/**
+ * The roster decides who gets into the cohort space, so a parser that admits
+ * junk admits people. Admins paste from spreadsheets and mail clients, so the
+ * input is messy by nature.
+ */
+describe('cohort roster parsing', () => {
+  it('accepts commas, semicolons, spaces, and new lines together', () => {
+    const parsed = parseEmailList(
+      'ada@example.edu, grace@example.edu;alan@example.edu\nedsger@example.edu'
+    )
+    expect(parsed).toHaveLength(4)
+    expect(parsed).toContain('alan@example.edu')
+  })
+
+  it('lowercases and de-duplicates so one person is admitted once', () => {
+    expect(parseEmailList('Ada@Example.edu, ada@example.edu')).toEqual([
+      'ada@example.edu',
+    ])
+  })
+
+  it('drops entries that are not shaped like an address', () => {
+    // A bare word or a partial address must never reach the roster.
+    expect(parseEmailList('notanemail, @nope.com, missing@tld, ok@example.edu'))
+      .toEqual(['ok@example.edu'])
+  })
+
+  it('returns nothing for empty or whitespace input', () => {
+    expect(parseEmailList('')).toEqual([])
+    expect(parseEmailList('   \n  ')).toEqual([])
   })
 })
