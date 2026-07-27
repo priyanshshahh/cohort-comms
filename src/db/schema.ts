@@ -19,7 +19,29 @@ export const users = pgTable('users', {
   handle: text('handle').notNull(),
   name: text('name').notNull(),
   avatarUrl: text('avatar_url'),
+  /** Lowercased primary email, matched against `cohort_allowlist` on sign-in. */
+  email: text('email'),
+  /**
+   * `active` members are in the cohort space; `pending` accounts can sign in
+   * but see nothing until an admin admits them. Signup itself stays open —
+   * gating on admission rather than registration means a member whose personal
+   * email is not on the list can still ask to be let in.
+   */
+  status: text('status').notNull().default('pending'),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at'),
   lastSeenAt: timestamp('last_seen_at').notNull().defaultNow(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+/**
+ * Emails admitted to the cohort automatically on first sign-in.
+ * Admins bulk-add the roster here so members land straight in the space
+ * without waiting to be approved one by one.
+ */
+export const cohortAllowlist = pgTable('cohort_allowlist', {
+  email: text('email').primaryKey(),
+  addedBy: text('added_by'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -130,6 +152,20 @@ export const reactions = pgTable(
   },
   (t) => [uniqueIndex('reactions_unique_idx').on(t.messageId, t.userId, t.emoji)]
 )
+
+/**
+ * Delivered webhook ids, for replay protection. The route inserts here with
+ * ON CONFLICT DO NOTHING and treats a conflict as a duplicate delivery.
+ *
+ * This table was previously created by hand on the live database and existed
+ * in no schema file or migration, so `drizzle-kit push` on a fresh deploy
+ * produced an app whose webhook route threw on every delivery. Declaring it
+ * here makes the deployment reproducible.
+ */
+export const webhookEvents = pgTable('webhook_events', {
+  eventId: text('event_id').primaryKey(),
+  receivedAt: timestamp('received_at').notNull().defaultNow(),
+})
 
 export type User = typeof users.$inferSelect
 export type Channel = typeof channels.$inferSelect

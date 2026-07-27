@@ -16,7 +16,16 @@ import {
   sql,
 } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { channels, messages, notifications, reactions, reads, typing, users } from '@/db/schema'
+import {
+  channels,
+  cohortAllowlist,
+  messages,
+  notifications,
+  reactions,
+  reads,
+  typing,
+  users,
+} from '@/db/schema'
 
 /** Channels every cohort member lands in, created on first boot. */
 export const DEFAULT_CHANNELS = [
@@ -72,10 +81,128 @@ export function isAdminHandle(handle: string | null | undefined): boolean {
   return adminHandles().includes(handle.toLowerCase())
 }
 
-export async function requireUserId(): Promise<string> {
+/** The signed-in Clerk id, with no cohort membership check. */
+export async function requireSignedInUserId(): Promise<string> {
   const { userId } = await auth()
   if (!userId) throw new Error('unauthorized')
   return userId
+}
+
+/**
+ * The signed-in member's id, refusing anyone the cohort has not admitted.
+ *
+ * Signup is deliberately open — a member whose personal email is not on the
+ * roster can still register and ask to be let in — so registration alone must
+ * not grant access to the space. The check lives here rather than in each
+ * route because every API route already calls this function: a route added
+ * later inherits the gate instead of being forgotten.
+ */
+export async function requireUserId(): Promise<string> {
+  const userId = await requireSignedInUserId()
+
+  const db = getDb()
+  const [row] = await db
+    .select({ status: users.status })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (row?.status !== 'active') throw new PendingApprovalError()
+  return userId
+}
+
+/** Raised when a signed-in account has not yet been admitted to the cohort. */
+export class PendingApprovalError extends Error {
+  constructor(message = 'awaiting cohort approval') {
+    super(message)
+    this.name = 'PendingApprovalError'
+  }
+}
+
+/** The signed-in member's row, or null before they have been synced. */
+export async function currentMember() {
+  const userId = await requireSignedInUserId().catch(() => null)
+  if (!userId) return null
+
+  const db = getDb()
+  const [row] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+  return row ?? null
+}
+
+/** The signed-in member's id, refusing anyone who is not a cohort admin. */
+export async function requireAdminId(): Promise<string> {
+  const userId = await requireUserId()
+  const db = getDb()
+  const [row] = await db
+    .select({ handle: users.handle })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  if (!isAdminHandle(row?.handle)) {
+    throw new ForbiddenError('admins only')
+  }
+  return userId
+}
+
+/**
+ * Raised when an authenticated caller asks for a conversation they are not a
+ * participant in. Distinct from a plain Error so routes can answer 403 rather
+ * than folding it into a generic 400.
+ */
+export class ForbiddenError extends Error {
+  constructor(message = 'not a participant in this conversation') {
+    super(message)
+    this.name = 'ForbiddenError'
+  }
+}
+
+/** The subset of a message row the thread-read decision depends on. */
+export type ThreadRootRef = {
+  parentId: number | null
+  dmKey: string | null
+} | null | undefined
+
+/**
+ * The authorization decision for reading a thread, as a pure function so it
+ * can be tested exhaustively without a database.
+ *
+ * A thread scope is only a message id, and ids are a serial primary key, so
+ * without this check any signed-in account could walk the id space and read
+ * every DM in the cohort. `postMessage` guarded its thread branch from the
+ * start; the read paths did not, and the test suite stayed green because its
+ * coverage stopped at pure functions. Keeping the rule pure is what lets the
+ * tests reach it.
+ *
+ * Rejecting a non-root id matters as much as the DM check: addressing a reply
+ * would otherwise return that reply's entire sibling set.
+ */
+export function assertThreadRootReadable(
+  root: ThreadRootRef,
+  meId: string
+): void {
+  if (!root) throw new ForbiddenError('thread not found')
+  if (root.parentId) throw new ForbiddenError('not a thread root')
+  if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
+    throw new ForbiddenError()
+  }
+}
+
+/** Load a thread root and prove the caller is allowed to read it. */
+async function requireReadableThreadRoot(rootId: number, meId: string) {
+  const db = getDb()
+  const [root] = await db
+    .select()
+    .from(messages)
+    .where(eq(messages.id, rootId))
+    .limit(1)
+
+  assertThreadRootReadable(root, meId)
+  return root
 }
 
 /**
@@ -98,14 +225,25 @@ export async function syncCurrentUser() {
   const name =
     [user.firstName, user.lastName].filter(Boolean).join(' ') || handle
 
+  const email =
+    user.emailAddresses[0]?.emailAddress?.trim().toLowerCase() ?? null
+
   const db = getDb()
-  await db
+
+  // Anyone the admins have already put on the roster is admitted on sight, so
+  // the common case is: click the link, sign in, land in the cohort space.
+  const admitted = email ? await isOnAllowlist(email) : false
+
+  const [row] = await db
     .insert(users)
     .values({
       id: user.id,
       handle,
       name,
       avatarUrl: user.imageUrl ?? null,
+      email,
+      status: admitted ? 'active' : 'pending',
+      approvedAt: admitted ? new Date() : null,
       lastSeenAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -114,11 +252,152 @@ export async function syncCurrentUser() {
         handle,
         name,
         avatarUrl: user.imageUrl ?? null,
+        email,
+        // Promote someone who has since been added to the roster, but never
+        // downgrade a member an admin admitted by hand.
+        ...(admitted ? { status: 'active', approvedAt: new Date() } : {}),
         lastSeenAt: new Date(),
       },
     })
+    .returning({ status: users.status })
 
-  return { id: user.id, handle, name, avatarUrl: user.imageUrl ?? null }
+  return {
+    id: user.id,
+    handle,
+    name,
+    avatarUrl: user.imageUrl ?? null,
+    email,
+    status: row?.status ?? (admitted ? 'active' : 'pending'),
+  }
+}
+
+/** True when this email is on the cohort roster. */
+export async function isOnAllowlist(email: string): Promise<boolean> {
+  const db = getDb()
+  const [row] = await db
+    .select({ email: cohortAllowlist.email })
+    .from(cohortAllowlist)
+    .where(eq(cohortAllowlist.email, email.trim().toLowerCase()))
+    .limit(1)
+  return Boolean(row)
+}
+
+/**
+ * Split a pasted roster into clean, unique emails.
+ * Admins paste from a spreadsheet or an email client, so accept commas,
+ * newlines, semicolons and spaces rather than demanding one format.
+ */
+export function parseEmailList(raw: string): string[] {
+  const seen = new Set<string>()
+  for (const piece of raw.split(/[\s,;]+/)) {
+    const email = piece.trim().toLowerCase()
+    // Deliberately permissive: a rough shape check, not RFC 5322.
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) continue
+    seen.add(email)
+  }
+  return [...seen]
+}
+
+/** Add emails to the roster and admit anyone already signed up under them. */
+export async function addToAllowlist(emails: string[], adminId: string) {
+  if (emails.length === 0) return { added: 0, admitted: 0 }
+  const db = getDb()
+
+  await db
+    .insert(cohortAllowlist)
+    .values(emails.map((email) => ({ email, addedBy: adminId })))
+    .onConflictDoNothing()
+
+  // Someone may have signed up before the admin got round to the roster;
+  // adding their email now should let them straight in.
+  const promoted = await db
+    .update(users)
+    .set({ status: 'active', approvedBy: adminId, approvedAt: new Date() })
+    .where(and(inArray(users.email, emails), eq(users.status, 'pending')))
+    .returning({ id: users.id })
+
+  return { added: emails.length, admitted: promoted.length }
+}
+
+export async function removeFromAllowlist(email: string) {
+  const db = getDb()
+  await db
+    .delete(cohortAllowlist)
+    .where(eq(cohortAllowlist.email, email.trim().toLowerCase()))
+}
+
+export async function listAllowlist() {
+  const db = getDb()
+  return db
+    .select()
+    .from(cohortAllowlist)
+    .orderBy(asc(cohortAllowlist.email))
+}
+
+/** Accounts that have signed in but are not yet in the cohort space. */
+export async function listPendingMembers() {
+  const db = getDb()
+  return db
+    .select()
+    .from(users)
+    .where(eq(users.status, 'pending'))
+    .orderBy(desc(users.createdAt))
+}
+
+/** Admit a single pending account. */
+export async function admitMember(userId: string, adminId: string) {
+  const db = getDb()
+  const [row] = await db
+    .update(users)
+    .set({ status: 'active', approvedBy: adminId, approvedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id, email: users.email })
+
+  // Keep the roster in step, so a re-signup does not need approving twice.
+  if (row?.email) {
+    await db
+      .insert(cohortAllowlist)
+      .values({ email: row.email, addedBy: adminId })
+      .onConflictDoNothing()
+  }
+  return row ?? null
+}
+
+/** Admit every pending account at once — the "let everyone in" button. */
+export async function admitAllPending(adminId: string) {
+  const db = getDb()
+  const rows = await db
+    .update(users)
+    .set({ status: 'active', approvedBy: adminId, approvedAt: new Date() })
+    .where(eq(users.status, 'pending'))
+    .returning({ id: users.id, email: users.email })
+
+  const emails = rows.map((r) => r.email).filter((e): e is string => Boolean(e))
+  if (emails.length > 0) {
+    await db
+      .insert(cohortAllowlist)
+      .values(emails.map((email) => ({ email, addedBy: adminId })))
+      .onConflictDoNothing()
+  }
+  return rows.length
+}
+
+/** Remove a member from the cohort space without deleting their history. */
+export async function revokeMember(userId: string) {
+  const db = getDb()
+  const [row] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1)
+
+  // Drop the roster entry too, or the next sign-in would re-admit them.
+  if (row?.email) await removeFromAllowlist(row.email)
+
+  await db
+    .update(users)
+    .set({ status: 'pending', approvedBy: null, approvedAt: null })
+    .where(eq(users.id, userId))
 }
 
 export async function ensureSeedChannels() {
@@ -192,6 +471,9 @@ export async function listMessages(scope: Scope, meId: string) {
   const db = getDb()
 
   if (scope.kind === 'thread') {
+    // Throws unless this caller may read the root's conversation.
+    await requireReadableThreadRoot(scope.rootId, meId)
+
     // The root message first, then its replies in order.
     const rows = await db
       .select(MESSAGE_FIELDS)
@@ -261,18 +543,9 @@ export async function postMessage(
 
   if (scope.kind === 'thread') {
     // A reply inherits the root's conversation so it stays searchable and
-    // stays inside the same channel or DM.
-    const [root] = await db
-      .select()
-      .from(messages)
-      .where(eq(messages.id, scope.rootId))
-      .limit(1)
-    if (!root) throw new Error('thread not found')
-    if (root.parentId) throw new Error('replies cannot be nested further')
-
-    if (root.dmKey && !root.dmKey.split('~').includes(meId)) {
-      throw new Error('not a participant in this conversation')
-    }
+    // stays inside the same channel or DM. Reuses the same gate as the read
+    // paths, so read and write authorization can never drift apart again.
+    const root = await requireReadableThreadRoot(scope.rootId, meId)
 
     ;[row] = await db
       .insert(messages)
@@ -334,6 +607,10 @@ export async function latestMessageId(scope: Scope, meId: string) {
   const db = getDb()
 
   if (scope.kind === 'thread') {
+    // Same gate as the read path, so /api/events cannot be used as a side
+    // channel to watch a stranger's DM for activity.
+    await requireReadableThreadRoot(scope.rootId, meId)
+
     const [row] = await db
       .select({ id: max(messages.id) })
       .from(messages)

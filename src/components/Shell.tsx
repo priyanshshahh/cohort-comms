@@ -146,6 +146,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   const channels = data?.channels ?? []
   const members = data?.members ?? []
+  const me = data?.me
   const totalUnread =
     channels.reduce((sum, c) => sum + c.unread, 0) +
     members.reduce((sum, m) => sum + m.unread, 0)
@@ -184,6 +185,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             Cohort Comms
           </span>
           <div className="ml-auto flex items-center gap-2">
+            {me?.isAdmin && (
+              <Link
+                href="/admin"
+                title="Cohort roster"
+                className="rounded-md px-1.5 py-1 text-sm text-muted hover:bg-hover hover:text-fg"
+              >
+                Roster
+              </Link>
+            )}
             <NotificationBell />
             <ThemeToggle />
             <UserButton />

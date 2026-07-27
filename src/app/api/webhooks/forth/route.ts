@@ -3,7 +3,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { getDb } from '@/db'
 import { sql } from 'drizzle-orm'
 import { postFromForth } from '@/lib/data'
-import { normalizeForthUrl } from '@/lib/forth'
+import { normalizeForthUrl, stripNonForthUrls } from '@/lib/forth'
 
 /**
  * Inbound webhook for Forth board events.
@@ -91,11 +91,20 @@ export async function POST(request: NextRequest) {
     if (normalized) link = normalized.url
   }
 
-  const status = String(ticket.status ?? '').trim()
+  // `ticket.url` is not the only attacker-controlled field. Title, status and
+  // assignee are interpolated into the body too, and the renderer auto-links
+  // bare URLs, so each one gets the same URL policy — otherwise the guard
+  // above holds for one field while the others stay wide open.
+  const title = stripNonForthUrls(String(ticket.title))
+  const status = stripNonForthUrls(String(ticket.status ?? '').trim())
+  const assignee = ticket.assignee
+    ? stripNonForthUrls(String(ticket.assignee))
+    : ''
+
   const icon = STATUS_ICON[status.toLowerCase()] ?? '⚒'
-  const parts = [`${icon} ${ticket.title}`]
+  const parts = [`${icon} ${title}`]
   if (status) parts.push(`moved to ${status}`)
-  if (ticket.assignee) parts.push(`· ${ticket.assignee}`)
+  if (assignee) parts.push(`· ${assignee}`)
 
   const body = [parts.join(' '), link].filter(Boolean).join('\n')
   const slug = typeof payload.channel === 'string' ? payload.channel : 'general'
