@@ -11,7 +11,11 @@
  */
 
 function csvEnv(raw: string | undefined, fallback: string): string[] {
-  return (raw ?? fallback)
+  // A blank value counts as unset. Vercel stores an empty string when a
+  // variable is created without one, and `?? fallback` would let that through
+  // as "no admins at all", locking the cohort out of its own roster screen.
+  const source = raw?.trim() ? raw : fallback
+  return source
     .split(',')
     .map((v) => v.trim().toLowerCase())
     .filter(Boolean)

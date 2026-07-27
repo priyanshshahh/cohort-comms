@@ -112,6 +112,16 @@ describe('admin identification across providers', () => {
     delete process.env.ADMIN_EMAILS
     expect(isAdmin('member', 'member@example.edu')).toBe(false)
   })
+
+  it('falls back to the defaults when ADMIN_HANDLES is blank', () => {
+    // Vercel stores an empty string for a variable created without a value.
+    // Treating that as "configured" would leave the cohort with no admins and
+    // nobody able to reach the roster screen to fix it.
+    process.env.ADMIN_HANDLES = ''
+    expect(isAdmin('rogerSuperBuilderAlpha', null)).toBe(true)
+    process.env.ADMIN_HANDLES = '   '
+    expect(isAdmin('priyanshshahh', null)).toBe(true)
+  })
 })
 
 describe('conversation scoping', () => {
