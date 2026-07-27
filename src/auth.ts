@@ -1,5 +1,6 @@
 import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
+import Google from 'next-auth/providers/google'
 
 /**
  * Authentication for the cohort platform.
@@ -27,6 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // primary email the roster is matched against.
       authorization: { params: { scope: 'read:user user:email' } },
     }),
+    Google,
   ],
   pages: {
     signIn: '/sign-in',
@@ -37,17 +39,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
      * we key `users.id` off the provider account id, and the handle drives
      * admin checks and @mentions.
      */
-    async jwt({ token, profile }) {
+    async jwt({ token, profile, account }) {
       if (profile) {
-        token.githubId = String(profile.id)
+        // GitHub gives a numeric id and a login; Google gives `sub` and no
+        // handle at all, so the handle is derived from the email downstream.
+        token.providerId = String(profile.id ?? profile.sub ?? token.sub ?? '')
         token.login = typeof profile.login === 'string' ? profile.login : null
+        token.provider = account?.provider ?? null
+        // Google's `email_verified` matters: identity here is linked by email,
+        // so an unverified address must not inherit someone else's account.
+        token.verifiedEmail =
+          account?.provider === 'google'
+            ? profile.email_verified === true
+            : true
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = (token.githubId as string) ?? token.sub ?? ''
+        session.user.id = (token.providerId as string) || (token.sub ?? '')
         session.user.login = (token.login as string | null) ?? null
+        session.user.provider = (token.provider as string | null) ?? null
+        session.user.verifiedEmail = token.verifiedEmail !== false
       }
       return session
     },

@@ -10,17 +10,50 @@
  * `data.ts` re-exports all of this, so callers import from either.
  */
 
-/** Cohort admins, by handle. Configurable per deployment. */
-export function adminHandles(): string[] {
-  return (process.env.ADMIN_HANDLES ?? 'admin,priyanshshahh')
+function csvEnv(raw: string | undefined, fallback: string): string[] {
+  return (raw ?? fallback)
     .split(',')
-    .map((h) => h.trim().toLowerCase())
+    .map((v) => v.trim().toLowerCase())
     .filter(Boolean)
+}
+
+/**
+ * Cohort admins by GitHub handle. Roger Hunt runs the cohort; Priyansh is
+ * co-admin. Both are defaults rather than hard-coded checks, so staff can
+ * change without a deploy.
+ */
+export function adminHandles(): string[] {
+  return csvEnv(
+    process.env.ADMIN_HANDLES,
+    'rogersuperbuilderalpha,priyanshshahh'
+  )
+}
+
+/**
+ * Cohort admins by email.
+ *
+ * Handles alone are not enough now that members can sign in with Google: a
+ * Google account has no GitHub login, so its handle falls back to the email
+ * prefix and would never match. An admin who signs in either way stays an
+ * admin.
+ */
+export function adminEmails(): string[] {
+  return csvEnv(process.env.ADMIN_EMAILS, '')
 }
 
 export function isAdminHandle(handle: string | null | undefined): boolean {
   if (!handle) return false
   return adminHandles().includes(handle.toLowerCase())
+}
+
+/** True when this member is an admin by either handle or email. */
+export function isAdmin(
+  handle: string | null | undefined,
+  email?: string | null
+): boolean {
+  if (isAdminHandle(handle)) return true
+  if (!email) return false
+  return adminEmails().includes(email.trim().toLowerCase())
 }
 
 /**

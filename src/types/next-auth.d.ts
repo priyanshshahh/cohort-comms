@@ -10,6 +10,8 @@ declare module 'next-auth' {
     user: {
       id: string
       login: string | null
+      provider: string | null
+      verifiedEmail: boolean
       name?: string | null
       email?: string | null
       image?: string | null

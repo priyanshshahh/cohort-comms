@@ -8,6 +8,7 @@ import {
   assertThreadRootReadable,
   dmKeyFor,
   ForbiddenError,
+  isAdmin,
   isAdminHandle,
   parseEmailList,
   parseScope,
@@ -75,6 +76,41 @@ describe('admin gating for #announcements', () => {
     process.env.ADMIN_HANDLES = 'admin'
     expect(isAdminHandle('admin2')).toBe(false)
     expect(isAdminHandle('notadmin')).toBe(false)
+  })
+})
+
+/**
+ * Roger Hunt runs the cohort and Priyansh is co-admin. Admin has to survive
+ * either sign-in method: a Google account carries no GitHub login, so its
+ * handle falls back to the email prefix and would never match by handle.
+ */
+describe('admin identification across providers', () => {
+  it('grants the configured GitHub handles', () => {
+    delete process.env.ADMIN_HANDLES
+    delete process.env.ADMIN_EMAILS
+    expect(isAdmin('rogerSuperBuilderAlpha', null)).toBe(true)
+    expect(isAdmin('priyanshshahh', null)).toBe(true)
+    expect(isAdmin('someone-else', null)).toBe(false)
+  })
+
+  it('grants an admin who signed in with Google, by email', () => {
+    process.env.ADMIN_HANDLES = 'rogersuperbuilderalpha'
+    process.env.ADMIN_EMAILS = 'roger@example.com'
+    // Google yields no handle, so the email prefix is all we have.
+    expect(isAdmin('roger', 'roger@example.com')).toBe(true)
+    expect(isAdmin('roger', 'ROGER@example.com')).toBe(true)
+  })
+
+  it('does not grant a stranger who merely shares an email prefix', () => {
+    process.env.ADMIN_HANDLES = 'rogersuperbuilderalpha'
+    process.env.ADMIN_EMAILS = 'roger@example.com'
+    expect(isAdmin('roger', 'roger@evil.example.net')).toBe(false)
+  })
+
+  it('grants nobody by email when ADMIN_EMAILS is unset', () => {
+    process.env.ADMIN_HANDLES = 'rogersuperbuilderalpha'
+    delete process.env.ADMIN_EMAILS
+    expect(isAdmin('member', 'member@example.edu')).toBe(false)
   })
 })
 
