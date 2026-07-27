@@ -37,10 +37,16 @@ export default function SignOut({
       )}
       <button
         onClick={() => signOut({ redirectTo: '/' })}
+        aria-label={`Sign out of ${name}`}
         title={`Sign out of ${name}`}
-        className="rounded-md px-1.5 py-1 text-xs text-muted hover:bg-hover hover:text-fg"
+        // The label would crowd the mobile header next to the bell and theme
+        // toggle, so below sm only the icon shows. The accessible name stays.
+        className="flex min-h-9 min-w-9 items-center justify-center rounded-md px-1.5 py-1 text-xs text-muted hover:bg-hover hover:text-fg"
       >
-        Sign out
+        <span className="hidden sm:inline">Sign out</span>
+        <span className="sm:hidden" aria-hidden>
+          ⏻
+        </span>
       </button>
     </div>
   )
