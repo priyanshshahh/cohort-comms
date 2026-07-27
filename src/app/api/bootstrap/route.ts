@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import {
   dmKeyFor,
-  isAdminHandle,
+  isAdmin as isAdminMember,
   listChannels,
   listMembers,
   syncCurrentUser,
@@ -24,7 +24,7 @@ export async function GET() {
     unreadByScope(me.id),
   ])
 
-  const isAdmin = isAdminHandle(me.handle)
+  const isAdmin = isAdminMember(me.handle, me.email)
 
   return NextResponse.json({
     me: { ...me, isAdmin },

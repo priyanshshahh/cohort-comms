@@ -20,7 +20,7 @@ export const users = pgTable('users', {
   name: text('name').notNull(),
   avatarUrl: text('avatar_url'),
   /** Lowercased primary email, matched against `cohort_allowlist` on sign-in. */
-  email: text('email'),
+  email: text('email').unique(),
   /**
    * `active` members are in the cohort space; `pending` accounts can sign in
    * but see nothing until an admin admits them. Signup itself stays open —

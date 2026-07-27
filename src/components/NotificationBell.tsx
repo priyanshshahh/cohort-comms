@@ -5,6 +5,7 @@ import Link from 'next/link'
 import useSWR from 'swr'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { motionTokens } from '@/lib/motionTokens'
+import { useDesktopNotifications } from './useDesktopNotifications'
 
 type Item = {
   id: number
@@ -47,6 +48,9 @@ export default function NotificationBell() {
 
   const unread = data?.unread ?? 0
   const items = data?.items ?? []
+
+  // Fires only while the tab is hidden; the bell covers the visible case.
+  const desktop = useDesktopNotifications(data?.items)
 
   async function markAll() {
     await fetch('/api/notifications', {
@@ -135,6 +139,33 @@ export default function NotificationBell() {
                 </li>
               ))}
             </ul>
+
+            {desktop.permission !== 'unsupported' && (
+              <div className="border-t border-line px-3 py-2">
+                {desktop.permission === 'denied' ? (
+                  <p className="text-[11px] text-muted">
+                    Desktop alerts are blocked in your browser settings for this
+                    site.
+                  </p>
+                ) : desktop.enabled ? (
+                  <button
+                    type="button"
+                    onClick={desktop.disable}
+                    className="text-[11px] text-muted hover:underline"
+                  >
+                    Turn off desktop alerts
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={desktop.enable}
+                    className="text-[11px] text-accent hover:underline"
+                  >
+                    Get desktop alerts when this tab is in the background
+                  </button>
+                )}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

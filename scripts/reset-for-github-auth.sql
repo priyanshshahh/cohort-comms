@@ -32,7 +32,7 @@ CREATE TABLE users (
   handle       text NOT NULL,
   name         text NOT NULL,
   avatar_url   text,
-  email        text,
+  email        text UNIQUE,
   status       text NOT NULL DEFAULT 'pending',
   approved_by  text,
   approved_at  timestamp,

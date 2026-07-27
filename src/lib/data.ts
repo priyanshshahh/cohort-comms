@@ -6,11 +6,8 @@ import {
   desc,
   eq,
   gt,
-  ilike,
   inArray,
-  isNotNull,
   isNull,
-  like,
   max,
   or,
   sql,
@@ -18,17 +15,14 @@ import {
 import { getDb } from '@/db'
 export * from './policy'
 import {
-  adminHandles,
   assertThreadRootReadable,
+  isAdmin,
   dmKeyFor,
   ForbiddenError,
   isAdminHandle,
-  parseEmailList,
-  parseScope,
   PendingApprovalError,
   scopeKey,
   type Scope,
-  type ThreadRootRef,
 } from './policy'
 import {
   channels,
@@ -98,17 +92,28 @@ export async function requireSignedInUserId(): Promise<string> {
  * later inherits the gate instead of being forgotten.
  */
 export async function requireUserId(): Promise<string> {
-  const userId = await requireSignedInUserId()
+  const session = await auth()
+  const sessionId = session?.user?.id
+  if (!sessionId) throw new Error('unauthorized')
 
+  // Match on the provider id or the email, because a member who signed up
+  // with GitHub and later signs in with Google arrives with a different
+  // provider id but keeps their original row. Looking up by id alone would
+  // lock them out of their own account.
+  const email = session.user.email?.trim().toLowerCase() ?? null
   const db = getDb()
   const [row] = await db
-    .select({ status: users.status })
+    .select({ id: users.id, status: users.status })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(
+      email && session.user.verifiedEmail
+        ? or(eq(users.id, sessionId), eq(users.email, email))
+        : eq(users.id, sessionId)
+    )
     .limit(1)
 
   if (row?.status !== 'active') throw new PendingApprovalError()
-  return userId
+  return row.id
 }
 
 /** The signed-in member's row, or null before they have been synced. */
@@ -130,12 +135,14 @@ export async function requireAdminId(): Promise<string> {
   const userId = await requireUserId()
   const db = getDb()
   const [row] = await db
-    .select({ handle: users.handle })
+    .select({ handle: users.handle, email: users.email })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1)
 
-  if (!isAdminHandle(row?.handle)) {
+  // By handle or by email, so an admin signing in with Google (which has no
+  // GitHub login) is still an admin.
+  if (!isAdmin(row?.handle, row?.email)) {
     throw new ForbiddenError('admins only')
   }
   return userId
@@ -155,9 +162,9 @@ async function requireReadableThreadRoot(rootId: number, meId: string) {
 }
 
 /**
- * Mirror the signed-in Clerk user into our `users` table and refresh their
- * presence timestamp. Clerk remains the identity source of truth; this row
- * exists so we can join author details onto messages cheaply.
+ * Mirror the signed-in member into our `users` table and refresh their
+ * presence timestamp. The OAuth provider remains the identity source of
+ * truth; this row exists so we can join author details onto messages cheaply.
  */
 export async function syncCurrentUser() {
   const session = await auth()
@@ -166,11 +173,29 @@ export async function syncCurrentUser() {
 
   // The GitHub login is the handle everywhere: admin checks, @mentions, and
   // the identity Forth keys off, so a member is the same person in both tools.
+  // Google accounts have no handle, so they fall back to the email prefix.
   const email = user.email?.trim().toLowerCase() ?? null
   const handle = user.login ?? email?.split('@')[0] ?? 'member'
   const name = user.name?.trim() || handle
 
   const db = getDb()
+
+  /**
+   * Link the two providers by email, so signing in with Google and with
+   * GitHub reaches one member rather than creating a duplicate who cannot see
+   * their own DMs. Only a verified email may claim an existing row: Google
+   * reports `email_verified`, and without that check an unverified address
+   * would be enough to take over somebody else's account.
+   */
+  let id = user.id
+  if (email && user.verifiedEmail) {
+    const [existing] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+    if (existing) id = existing.id
+  }
 
   // Anyone the admins have already put on the roster is admitted on sight, so
   // the common case is: click the link, sign in, land in the cohort space.
@@ -179,7 +204,7 @@ export async function syncCurrentUser() {
   const [row] = await db
     .insert(users)
     .values({
-      id: user.id,
+      id,
       handle,
       name,
       avatarUrl: user.image ?? null,
@@ -204,7 +229,7 @@ export async function syncCurrentUser() {
     .returning({ status: users.status })
 
   return {
-    id: user.id,
+    id,
     handle,
     name,
     avatarUrl: user.image ?? null,

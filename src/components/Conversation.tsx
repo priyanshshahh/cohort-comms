@@ -71,7 +71,6 @@ export default function Conversation({
               subtitle="Replies stay out of the main channel"
               readOnly={readOnly}
               readOnlyReason={readOnlyReason}
-              compact
             />
           </div>
         </aside>
