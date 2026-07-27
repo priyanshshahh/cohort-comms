@@ -723,6 +723,7 @@ export default function DemoWorkspace() {
                 id="demo-composer"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                onFocus={() => setTourDismissed(true)}
                 placeholder={`Message ${title} (demo — stays on this device)`}
                 className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
               />
@@ -818,6 +819,7 @@ export default function DemoWorkspace() {
               <input
                 value={threadDraft}
                 onChange={(e) => setThreadDraft(e.target.value)}
+                onFocus={() => setTourDismissed(true)}
                 placeholder="Reply in thread…"
                 aria-label="Reply in thread"
                 autoComplete="off"

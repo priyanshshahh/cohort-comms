@@ -1,101 +1,142 @@
 # Cohort Comms
 
-Internal communications platform for the Hult Cohort Developer Program
-(Summer Pilot 2026, Project 2). Replaces Discord as the cohort's primary
-channel: public channels, direct messages, unread notifications, and
-first-class links into **Forth**, the cohort's project management platform.
+Internal communications for the Hult Cohort Developer Program (Summer Pilot 2026,
+Project 2). Channels, DMs, threads, and a live **Forth** integration — webhook,
+deep-link cards, and an embedded board pane.
 
 **Production:** https://cohort-comms-phi.vercel.app
 
+## Reviewers: start here (no signup)
+
+**▶ Interactive live demo:** https://cohort-comms-phi.vercel.app/demo
+
+Post, react, open threads/DMs, and run the 30-second Forth tour without an
+account. Local-only state — nothing writes to the live cohort DB. Look for the
+amber `WEBHOOK` badge in `#general`.
+
+Sign in at the production URL to use the real workspace (SSE live updates,
+@mention inbox, image attach).
+
 ## Features
 
-- **Channels** — `#general`, `#project-2`, `#peer-review`, `#help` are seeded on
-  first boot; any member can open another from the sidebar.
-- **Direct messages** — one-to-one with any enrolled participant. Conversations
-  are keyed by the sorted pair of user ids, so there are no conversation records
-  to manage.
-- **Unread notifications** — per-conversation read cursors drive unread badges in
-  the sidebar and a total count in the mobile header.
-- **Presence** — a member shows as online when seen within the last two minutes.
-- **Forth-aware messages** — paste a link to the Forth board and it renders as a
-  card labelled with the view it points at (Quest Log, Realm Map, Chronicle,
-  Guild Hall), so a thread about a ticket carries a route back to the board.
-- **Mobile responsive** — collapsible sidebar, full-height chat.
+- **Channels** — seeded `#general`, `#project-2`, `#peer-review`, `#help`, plus
+  admin-only `#announcements`
+- **Direct messages** — 1:1, keyed by sorted participant ids
+- **Threads** — one-level replies with live reply counts on roots
+- **Reactions** — emoji reactions on messages
+- **Search + ⌘K** — Postgres FTS and a command palette
+- **Unread + presence** — per-conversation read cursors; online within ~2 min
+- **@mentions** — autocomplete chips + notification bell inbox
+- **Image attach** — composer upload (Vercel Blob when configured, else data URL)
+- **Light / dark** — theme toggle
+- **Interactive `/demo`** — full walkthrough without Clerk
 
 ## Stack
 
 | Concern | Choice |
 |---|---|
-| Framework | Next.js 16 (App Router, Turbopack) |
-| Auth | Clerk (`@clerk/nextjs` v7) |
+| Framework | Next.js 16 (App Router) |
+| Auth | Clerk (`@clerk/nextjs` v7) — Marketplace instance |
 | Database | Neon Postgres via Drizzle ORM |
-| Transport | HTTP polling (SWR) — 2s in a conversation, 5s for the sidebar |
+| Realtime | SSE (`/api/events`) + SWR fallback while the stream is down |
 | Hosting | Vercel |
 
-Both Clerk and Neon were provisioned through the Vercel Marketplace, so
-environment variables are injected into the deployment automatically.
+Clerk and Neon are provisioned through the Vercel Marketplace.
 
-### Why polling rather than WebSockets
+### Auth note
 
-Messages are delivered by short-interval polling, not a socket. At cohort scale
-(tens of participants) this is a couple of lightweight queries per client per
-second, and it removes an entire class of connection-lifecycle bugs on
-serverless. The trade-off is honest: delivery latency is up to ~2 seconds rather
-than instant. Swapping `ChatView` to a socket or SSE transport later does not
-change the schema or the API surface.
+The live deploy currently uses a **Clerk development** instance (`pk_test_…`)
+because `*.vercel.app` cannot satisfy production Clerk DNS. The UI may show a
+“Development mode” badge. Enable the social providers you want in the Clerk
+dashboard (Google is live today; add GitHub there if you need both).
+
+### Realtime (SSE + SWR)
+
+Signed-in chat opens `EventSource` on `/api/events?scope=…`, which polls
+`max(message id)` and pushes when it advances. While Live, SWR does not poll;
+if the stream drops, SWR resumes ~2s polling as a safety net. At cohort scale
+this avoids WebSocket connection lifecycle on serverless without pretending
+delivery is instantaneous.
 
 ## Local setup
 
 ```bash
 npm install
-cp .env.example .env.local     # fill from Clerk + Neon (or `vercel env pull`)
-npx dotenv -e .env.local -- npx drizzle-kit push   # create tables
+cp .env.example .env.local     # or: vercel env pull
+npx dotenv -e .env.local -- npx drizzle-kit push
 npm run dev
 ```
 
-`drizzle-kit` and other Node scripts do not auto-load `.env.local`, hence the
-`dotenv -e` prefix. Next.js itself loads it automatically.
-
 ```bash
 npm run build   # production build + typecheck
+npm test        # vitest (incl. security cases)
 ```
 
 ## Architecture
 
 ```
 src/
-  proxy.ts                 Clerk middleware (Next 16 renamed middleware -> proxy)
-  db/schema.ts             users, channels, messages, reads
-  db/index.ts              lazy Neon client (safe at build time)
-  lib/data.ts              queries: scopes, messages, unread, presence
-  lib/forth.ts             Forth URL detection and view labelling
-  app/api/bootstrap        sidebar payload: identity, channels, roster, unread
-  app/api/messages         conversation history + send
-  app/api/channels         create a channel
-  app/(app)/               authenticated shell, channel and DM pages
-  components/Shell.tsx     sidebar, unread badges, presence, Forth link
-  components/ChatView.tsx  message list, composer, Forth cards
+  proxy.ts                      Clerk gate; public /, /demo, webhook
+  db/schema.ts                  users, channels, messages, reads, notifications
+  lib/data.ts                   scopes, messages, unread, notifications, SSE cursor
+  lib/forth.ts                  Forth URL normalize + card labels
+  app/api/webhooks/forth        inbound Forth webhook (secret + allowlist)
+  app/api/events                SSE near-realtime
+  app/api/notifications         bell inbox
+  app/api/upload                image attachments
+  components/DemoWorkspace.tsx  no-signup interactive demo
+  components/ChatView.tsx       SSE, threads, attach, Forth cards
+  components/NotificationBell.tsx
 ```
 
-A single `messages` table backs both channels and DMs: a channel message sets
-`channel_id`, a DM sets `dm_key` to the two participant ids sorted and joined.
+One `messages` table backs channels and DMs (`channel_id` vs sorted `dm_key`).
+Threads use `parent_id` on the same table.
 
 ## Forth integration
 
-Forth (https://forth-bice.vercel.app, https://github.com/CodingWCal/forth) is a
-Next.js + Firebase app that exposes no public REST API and no webhooks. The
-integration is therefore link-level and identity-level rather than
-server-to-server:
+Forth (https://forth-bice.vercel.app, https://github.com/CodingWCal/forth) is
+Next.js + Firebase and does **not** publish outbound webhooks today. Cohort
+Comms still ships the **receiving** half of the contract, plus embeds and cards.
 
-- **Deep links** — any Forth URL pasted into a conversation is detected and
-  rendered as a labelled card linking back to the board.
-- **Persistent entry point** — a Forth board link sits in the sidebar on every
-  screen.
-- **Shared identity** — Forth authenticates with Google and GitHub OAuth; Comms
-  uses the same providers through Clerk, so members carry one identity across
-  both tools.
+### 1. Inbound webhook (live)
 
-Automatic task notifications (a Forth ticket moving to Shipped posting into
-`#general`) would need an API or webhook Forth does not currently publish. The
-receiving side here is a single `postMessage()` call, so it is a small change if
-Forth adds one.
+`POST /api/webhooks/forth` with header `x-forth-secret` matching
+`FORTH_WEBHOOK_SECRET`. Secret compare is constant-time. Only same-origin Forth
+links are kept; hostile URLs are stripped. Replay protection uses `event_id`
+dedupe + a stale `sentAt` window.
+
+Verified on production:
+
+| Case | Result |
+|---|---|
+| Wrong / missing secret | `401` |
+| Missing `ticket.title` | `400` |
+| Valid shipped ticket | `201` — posts as Forth bot into the channel |
+| Payload with `https://evil.example.com/…` | `201`, hostile URL stripped |
+
+```bash
+curl -X POST https://cohort-comms-phi.vercel.app/api/webhooks/forth \
+  -H 'content-type: application/json' \
+  -H 'x-forth-secret: <FORTH_WEBHOOK_SECRET>' \
+  -d '{"event":"ticket.shipped","channel":"general",
+       "ticket":{"title":"Ship comms","status":"Shipped",
+                 "assignee":"priyanshshahh",
+                 "url":"https://forth-bice.vercel.app/#chronicle"}}'
+```
+
+### 2. Embedded board
+
+Toggleable split-pane iframe of Forth beside chat (plus “Open in tab”). Embed
+was checked against Forth response headers (no blocking `X-Frame-Options` /
+frame CSP) before shipping.
+
+### 3. Deep-link cards
+
+Any `forth-bice.vercel.app` URL pasted into chat (or delivered by the webhook)
+renders as a labelled card. Paths are normalized to Forth’s SPA hash routes
+(`/#board`, `/#chronicle`, …) so Open does not 404.
+
+### 4. Shared identity
+
+Sign in with the same email you use on Forth (Clerk on Comms; Google/GitHub on
+Forth). That is the curriculum’s cross-tool identity story.
