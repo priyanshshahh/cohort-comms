@@ -587,6 +587,17 @@ export default function DemoWorkspace() {
           <p className="text-xs text-muted">{subtitle}</p>
         </header>
 
+        {messages.length >= 3 && (
+          <div className="border-b border-accent/20 bg-accent-soft/30 px-5 py-2 text-xs text-muted">
+            <span className="font-semibold text-accent">Catch me up · </span>
+            {messages
+              .filter((m) => m.author !== 'You')
+              .slice(-3)
+              .map((m) => m.author.split(' ')[0] + ': ' + m.body.slice(0, 48))
+              .join(' · ')}
+          </div>
+        )}
+
         <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-2 md:hidden">
           <button
             onClick={() => {

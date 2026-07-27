@@ -7,6 +7,7 @@ import {
   integer,
   index,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core'
 
 /**
@@ -102,6 +103,19 @@ export const reads = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [uniqueIndex('reads_user_scope_idx').on(t.userId, t.scope)]
+)
+
+/**
+ * Ephemeral typing indicators. Rows older than a few seconds are ignored.
+ */
+export const typing = pgTable(
+  'typing',
+  {
+    scope: text('scope').notNull(),
+    userId: text('user_id').notNull(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.scope, t.userId] })]
 )
 
 /** Emoji reactions. One row per (message, user, emoji). */

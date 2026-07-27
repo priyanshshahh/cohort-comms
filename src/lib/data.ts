@@ -5,6 +5,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   ilike,
   inArray,
   isNotNull,
@@ -15,7 +16,7 @@ import {
   sql,
 } from 'drizzle-orm'
 import { getDb } from '@/db'
-import { channels, messages, notifications, reactions, reads, users } from '@/db/schema'
+import { channels, messages, notifications, reactions, reads, typing, users } from '@/db/schema'
 
 /** Channels every cohort member lands in, created on first boot. */
 export const DEFAULT_CHANNELS = [
@@ -716,4 +717,34 @@ export async function markRead(scope: Scope, meId: string, messageId: number) {
       target: [reads.userId, reads.scope],
       set: { lastReadMessageId: messageId, updatedAt: new Date() },
     })
+}
+
+
+/** Mark the current user as typing in a scope (TTL ~4s client-side). */
+export async function pulseTyping(scopeStr: string, meId: string) {
+  const db = getDb()
+  await db
+    .insert(typing)
+    .values({ scope: scopeStr, userId: meId, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [typing.scope, typing.userId],
+      set: { updatedAt: new Date() },
+    })
+}
+
+/** Active typers in a scope within the last 4 seconds, excluding me. */
+export async function listTyping(scopeStr: string, meId: string) {
+  const db = getDb()
+  const cutoff = new Date(Date.now() - 4_000)
+  const rows = await db
+    .select({
+      userId: typing.userId,
+      handle: users.handle,
+      name: users.name,
+      updatedAt: typing.updatedAt,
+    })
+    .from(typing)
+    .leftJoin(users, eq(typing.userId, users.id))
+    .where(and(eq(typing.scope, scopeStr), gt(typing.updatedAt, cutoff)))
+  return rows.filter((r) => r.userId !== meId)
 }

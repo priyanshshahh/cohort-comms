@@ -264,9 +264,18 @@ export default function ChatView({
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [live, setLive] = useState(false)
+  const [typers, setTypers] = useState<{ name: string | null; handle: string | null }[]>([])
+  const [catchUpOpen, setCatchUpOpen] = useState(false)
+  const [catchUpDismissed, setCatchUpDismissed] = useState(false)
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setCatchUpDismissed(false)
+    setCatchUpOpen(false)
+  }, [scope])
 
   const key = `/api/messages?scope=${encodeURIComponent(scope)}`
   const reduceMotion = useReducedMotion()
@@ -284,6 +293,9 @@ export default function ChatView({
   const roster = boot?.members ?? []
 
   const messages = data?.messages ?? []
+  const catchUpBrief = messages
+    .filter((m) => m.authorHandle && m.authorHandle !== meHandle)
+    .slice(-6)
 
   // Follow the conversation as it grows.
   useEffect(() => {
@@ -323,6 +335,22 @@ export default function ChatView({
     }
   }, [scope, mutate])
 
+  useEffect(() => {
+    let cancelled = false
+    async function tick() {
+      const res = await fetch(`/api/typing?scope=${encodeURIComponent(scope)}`)
+      if (!res.ok || cancelled) return
+      const payload = await res.json()
+      setTypers(payload.typers ?? [])
+    }
+    tick()
+    const id = setInterval(tick, 2000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
+  }, [scope])
+
   const react = useCallback(async (messageId: number, emoji: string) => {
     await fetch('/api/reactions', {
       method: 'POST',
@@ -338,6 +366,16 @@ export default function ChatView({
     const before = value.slice(0, cursor)
     const match = before.match(/@([a-zA-Z0-9_-]{0,39})$/)
     setMentionQuery(match ? match[1].toLowerCase() : null)
+    if (value.trim()) {
+      if (typingTimer.current) clearTimeout(typingTimer.current)
+      typingTimer.current = setTimeout(() => {
+        void fetch('/api/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scope }),
+        })
+      }, 250)
+    }
   }
 
   function insertMention(handle: string) {
@@ -422,6 +460,43 @@ export default function ChatView({
           <p className="text-sm text-muted">
             No messages yet. Say something to get it started.
           </p>
+        )}
+
+        {!catchUpDismissed && catchUpBrief.length >= 3 && (
+          <div className="mb-4 rounded-xl border border-accent/30 bg-accent-soft/40 px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-semibold text-accent">Catch me up</p>
+              <button
+                type="button"
+                onClick={() => setCatchUpOpen((v) => !v)}
+                className="text-xs text-muted underline hover:text-body"
+              >
+                {catchUpOpen
+                  ? 'Hide'
+                  : `Summarize last ${catchUpBrief.length} messages`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCatchUpDismissed(true)}
+                className="ml-auto text-[11px] text-muted hover:text-body"
+              >
+                Dismiss
+              </button>
+            </div>
+            {catchUpOpen && (
+              <ul className="mt-2 space-y-1.5">
+                {catchUpBrief.map((m) => (
+                  <li key={m.id} className="text-xs text-muted">
+                    <span className="font-semibold text-body">
+                      {m.authorName ?? m.authorHandle}
+                    </span>
+                    {': '}
+                    {m.body.length > 120 ? `${m.body.slice(0, 117)}…` : m.body}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         <ul className="flex flex-col gap-3">
@@ -536,6 +611,16 @@ export default function ChatView({
               {live ? 'Live' : 'Connecting…'}
             </motion.span>
             <span>· @mention · Reply · Attach image · Forth links</span>
+            {typers.length > 0 && (
+              <span className="text-accent">
+                ·{' '}
+                {typers
+                  .map((t) => t.name || (t.handle ? `@${t.handle}` : 'Someone'))
+                  .slice(0, 3)
+                  .join(', ')}{' '}
+                typing…
+              </span>
+            )}
           </p>
         </form>
       )}

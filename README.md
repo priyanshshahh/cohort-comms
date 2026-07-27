@@ -30,6 +30,8 @@ Sign in at the production URL to use the real workspace (SSE live updates,
 - **Image attach** — composer upload (Vercel Blob when configured, else data URL)
 - **Light / dark** — theme toggle
 - **Interactive `/demo`** — full walkthrough without Clerk
+- **Catch me up** — quick skim of recent messages when you open a busy channel
+- **Typing indicators** — see who is composing in the current conversation
 
 ## Stack
 
