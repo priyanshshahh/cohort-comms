@@ -30,10 +30,10 @@ export default function DemoPage() {
           </p>
           <div className="ml-auto flex items-center gap-2">
             <Link
-              href="/sign-up"
+              href="/sign-in"
               className="rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-on-accent hover:brightness-110"
             >
-              Join real workspace
+              Sign in / register
             </Link>
             <Link
               href="/"

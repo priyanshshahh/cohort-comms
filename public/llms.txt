@@ -1,61 +1,51 @@
 # Cohort Comms
 
 > Official communications platform for the Hult Cohort Developer Program
-> (Summer Pilot 2026, Week 2 winner). Channels, DMs, one-level threads,
-> reactions, search, @mention inbox, typing indicators, image attach,
-> unread/presence, light/dark — plus Forth board embed, deep-link cards,
-> and a live inbound webhook receiver (Forth does not send outbound events).
+> (Summer Pilot 2026, Week 2 winner). Open signup with GitHub/Google; pending
+> accounts get a personal space; admins admit people into the cohort workspace
+> (bell join_request + /admin roster). Channels, DMs, threads, reactions,
+> search, typing, image attach — plus Forth embed, deep-link cards, and an
+> inbound webhook receiver (Forth does not send outbound events).
 
 ## Links
 
-- [Production app](https://cohort-comms-phi.vercel.app): sign in to the live cohort workspace.
-- [Interactive demo](https://cohort-comms-phi.vercel.app/demo): no account; local-only interactive walkthrough.
+- [Production app](https://cohort-comms-phi.vercel.app): sign in / register.
+- [Interactive demo](https://cohort-comms-phi.vercel.app/demo): no account; local-only walkthrough.
 - [Source code](https://github.com/priyanshshahh/cohort-comms): Next.js 16 app.
 - [Forth project board](https://forth-bice.vercel.app): PM platform this integrates with.
 - [Submission pull request](https://github.com/rogerSuperBuilderAlpha/hult-cohort-program/pull/118): cohort record.
 
 ## Stack
 
-Next.js 16.2 (App Router), React 19, Auth.js v5 with GitHub OAuth, Neon Postgres via Drizzle ORM,
-optional Vercel Blob uploads, deployed on Vercel. Realtime is SSE on
-`/api/events` (poll max message id ~800ms) with SWR ~2s fallback while the
-stream is down. Sidebar bootstrap ~5s; notification bell ~4s.
+Next.js 16.2 (App Router), React 19, Auth.js v5 (GitHub + Google OAuth), Neon
+Postgres via Drizzle ORM, optional Vercel Blob, deployed on Vercel. Realtime:
+SSE `/api/events` + SWR fallback.
+
+## Access
+
+- Anyone can register (GitHub or Google).
+- New accounts are `pending`: personal channels only; cohort channels/DMs closed.
+- Admins are notified (`join_request`) and admit at `/admin` (or email allowlist).
+- Admitted members (`active`) get the full cohort workspace.
 
 ## Features (signed-in)
 
-- Seeded channels: #announcements (admin-only post), #general, #project-2,
-  #peer-review, #help; members can create channels
-- 1:1 DMs; one-level threads; emoji reactions (👍 🎉 🔥 👀 ✅ ❤️)
-- Postgres FTS search + ⌘K command palette
-- Unread badges; presence (~2 min lastSeenAt); typing indicators
-- @mentions → notification bell (mention / dm / reply)
-- Image attach (Blob or data URL); Catch me up skim; light/dark theme
-
-## Project management integration (Forth)
-
-Forth publishes no public REST API and no outbound webhooks. Integration:
-
-1. Inbound webhook receiver: `POST /api/webhooks/forth` with `x-forth-secret`
-   (constant-time). Posts as Forth bot into a channel. Same-origin Forth URLs
-   only; optional event_id dedupe + sentAt ±5 min window. Curl-verified;
-   shipping on Forth does not auto-call this yet.
-2. Embedded board: split-pane iframe beside chat.
-3. Deep-link cards: pasted forth-bice.vercel.app URLs → labelled SPA hash cards.
-4. Shared identity: same email / OAuth across tools (not technical SSO).
+- Seeded + member-created channels; #announcements admin-only post
+- 1:1 DMs; one-level threads; reactions; FTS + ⌘K
+- Unread, presence, typing, @mention bell, image attach, light/dark
+- Forth embed + deep-link cards + inbound webhook receiver
 
 ## Routes
 
 - `/` — landing (public); signed-in → `/c/general`
-- `/demo` — interactive product walkthrough, no account (public, local state)
-- `/sign-in` — GitHub OAuth via Auth.js (public)
-- `/c/[slug]` — channel (auth)
-- `/dm/[userId]` — 1:1 DM (auth)
-- `/api/bootstrap`, `/api/channels`, `/api/messages`, `/api/events`,
-  `/api/search`, `/api/reactions`, `/api/notifications`, `/api/typing`,
-  `/api/upload` — authenticated APIs
-- `/api/webhooks/forth` — inbound board events (shared-secret auth)
+- `/demo` — interactive walkthrough (public, local state)
+- `/sign-in` — GitHub / Google via Auth.js (public)
+- `/c/[slug]`, `/dm/[userId]` — chat (auth; cohort scopes need admission)
+- `/admin` — roster (admins)
+- `/api/admin/members` — admit / revoke / allowlist
+- `/api/webhooks/forth` — inbound board events (shared-secret)
 
 ## Not implemented
 
-Message edit/delete, nested threads, group DMs, channel archive UI,
-push/email notifications, automatic Forth → chat on ticket ship.
+Message edit/delete, nested threads, group DMs, push/email notifications,
+automatic Forth → chat on ticket ship.

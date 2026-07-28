@@ -10,7 +10,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@clerk/themes": "^2.4.57",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.6.1",
     "drizzle-orm": "^0.45.2",

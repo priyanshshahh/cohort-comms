@@ -16,117 +16,130 @@ Local-only React state — nothing writes to the live cohort DB. Look for the
 amber `WEBHOOK` badge in `#general` (simulated bot message, not a live Forth
 push).
 
-Sign in at the production URL for the real workspace (SSE live updates,
-@mention inbox, image attach, Postgres-backed history).
+Sign in with GitHub or Google at the production URL. New accounts land in a
+personal space; an admin admits them into the shared cohort workspace.
+
+## Access model
+
+| Who | What they get |
+|---|---|
+| Anyone | Demo (`/demo`), landing, sign-in / register |
+| Signed-in (pending) | Personal channels only; admins get a join-request bell + Roster badge |
+| Admitted (`status=active`) | Cohort channels, DMs, roster, FTS search |
+| Admin (`ADMIN_HANDLES` / `ADMIN_EMAILS`) | `/admin` roster: admit, revoke, email allowlist |
+
+Emails on `cohort_allowlist` are auto-admitted on first sign-in. Everyone else
+registers as `pending` until an admin admits them.
 
 ## Features
 
 | Feature | Status |
 |---|---|
+| Open signup | GitHub + Google OAuth; pending until admin admit |
+| Personal space while pending | Create private channels before cohort access |
+| Admin join notifications | Bell `join_request` + Roster pending badge |
 | Channels | Seeded `#announcements`, `#general`, `#project-2`, `#peer-review`, `#help`; members can create more |
-| Admin announcements | `#announcements` is read-only unless handle is in `ADMIN_HANDLES` |
+| Admin announcements | `#announcements` is read-only unless admin |
 | Direct messages | 1:1 only; key = sorted participant ids joined with `~` |
-| Threads | One-level replies; nested replies rejected; live reply counts on roots |
+| Threads | One-level replies; nested replies rejected |
 | Reactions | Toggle allowlist: 👍 🎉 🔥 👀 ✅ ❤️ |
-| Search + ⌘K | Postgres FTS; command palette jumps to channels/members and searches messages |
-| Unread + presence | Per-conversation read cursors; online if `lastSeenAt` within ~2 min |
-| @mentions | Autocomplete chips + notification bell (mention / DM / reply) |
-| Image attach | Composer upload; Vercel Blob when configured, else data URL |
-| Typing indicators | Who is composing in the current conversation |
-| Catch me up | Skim of recent others’ messages when opening a busy channel |
-| Light / dark | Theme toggle (`localStorage` + `.dark`) |
+| Search + ⌘K | Postgres FTS; command palette |
+| Unread + presence | Per-conversation read cursors; online ~2 min |
+| @mentions | Autocomplete + notification bell |
+| Image attach | Vercel Blob when configured, else data URL |
+| Typing indicators | Current conversation |
+| Catch me up | Skim recent others’ messages |
+| Light / dark | Theme toggle |
 | Interactive `/demo` | Full walkthrough without signing in |
-| Forth board embed | Split-pane iframe beside chat (default open) |
-| Forth deep-link cards | Pasted `forth-bice.vercel.app` URLs → labelled cards |
+| Forth board embed | Split-pane iframe beside chat |
+| Forth deep-link cards | Pasted Forth URLs → labelled cards |
 | Forth inbound webhook | Receiver live; Forth does **not** send outbound events yet |
 
-### Not implemented (schema/UI gaps)
+### Not implemented
 
-- Message edit / delete (`edited_at` exists; no API or UI)
-- Nested threads
-- Group / multi-party DMs
-- Channel archive UI (`archived` filtered in bootstrap only)
+- Nested threads / group DMs
 - Push / email notifications (in-app bell only)
-- Automatic Forth → Comms posts (Forth publishes no outbound webhooks)
+- Automatic Forth → Comms posts on ticket ship
+
+### Known limitations
+
+These are real gaps, not oversights waiting to be discovered. Each one has an
+open issue with context and a suggested starting point, and each is open for
+anyone to pick up. Nothing here blocks day-to-day use; the first two are what
+stand between this and being something a cohort should fully depend on.
+
+| Limitation | Impact | Issue |
+|---|---|---|
+| No message delete or edit | A message with a leaked key or a regretted screenshot is permanent short of manual SQL | [#19](https://github.com/priyanshshahh/cohort-comms/issues/19) |
+| Attachments stored in Postgres when Blob is unset | Database grows fast; encoded bytes ride along in every channel fetch | [#20](https://github.com/priyanshshahh/cohort-comms/issues/20) |
+| No rate limiting | One user or a bad retry loop can flood a channel and the row quota | [#21](https://github.com/priyanshshahh/cohort-comms/issues/21) |
+| No error monitoring | Production failures are found by someone noticing, not by an alert | [#22](https://github.com/priyanshshahh/cohort-comms/issues/22) |
+| No verified backup / restore | Neon retention unconfirmed, restore never tested, migrations applied by hand | [#23](https://github.com/priyanshshahh/cohort-comms/issues/23) |
+
+Picking one up: comment on the issue first so two people do not start the same
+work. Authorization rules belong in `src/lib/policy.ts`, which imports nothing
+but the standard library, with tests in `tests/security.test.ts`. CI runs
+`npm test` and `tsc --noEmit` on every pull request.
 
 ## Stack
 
 | Concern | Choice |
 |---|---|
 | Framework | Next.js 16.2 (App Router), React 19 |
-| Auth | Auth.js v5 (`next-auth`) with GitHub OAuth |
+| Auth | Auth.js v5 (`next-auth`) — GitHub + Google OAuth |
 | Database | Neon Postgres via Drizzle ORM |
-| Realtime | SSE (`/api/events`) + SWR fallback while the stream is down |
+| Realtime | SSE (`/api/events`) + SWR fallback |
 | Uploads | `@vercel/blob` (optional) |
 | Hosting | Vercel |
 | Tests | Vitest (`npm test`) |
 
-Neon is provisioned through the Vercel Marketplace. Auth is a GitHub OAuth app.
-
 ### Auth note
 
-Auth is a **production** deployment. Auth.js with a GitHub OAuth app has no
-DNS requirement, so it runs as real production auth on `*.vercel.app` with no
-custom domain, no "development mode" badge, and no user cap. The previous
-Clerk setup could not: Clerk production instances need DNS records on a domain
-you control.
+Auth.js on `*.vercel.app` is production auth (no custom domain required). The
+previous Clerk setup needed DNS you control and was abandoned.
 
-Access is limited to the cohort. Emails on the roster (`cohort_allowlist`) are
-admitted automatically at first sign-in; everyone else waits on the approval
-screen until an admin admits them at `/admin`.
+Sign-in shows a provider button only when that provider’s env vars are set.
+GitHub is live in production. Google appears after `AUTH_GOOGLE_ID` /
+`AUTH_GOOGLE_SECRET` are set on Vercel.
 
 ### Realtime (SSE + SWR)
 
-Signed-in chat opens `EventSource` on `/api/events?scope=…`, which polls
-`max(message id)` ~every 800ms and pushes when it advances (~25s connection
-lifetime). While Live, SWR does not poll; if the stream drops, SWR resumes ~2s
-polling. Sidebar bootstrap refreshes ~5s; notification bell ~4s.
+Signed-in chat opens `EventSource` on `/api/events?scope=…` (~800ms poll of
+max message id, ~25s connection). While Live, SWR does not poll; if the stream
+drops, SWR resumes ~2s polling.
 
 ## Routes
 
 | Path | Auth | Behavior |
 |---|---|---|
-| `/` | Public | Landing; signed-in users redirect to `/c/general` |
+| `/` | Public | Landing; signed-in → `/c/general` |
 | `/demo` | Public | Interactive local-only walkthrough |
-| `/sign-in` | Public | Auth.js |
-| `/c/[slug]` | Required | Channel chat |
-| `/dm/[userId]` | Required | 1:1 DM |
+| `/sign-in` | Public | Auth.js (GitHub / Google) |
+| `/c/[slug]` | Required | Channel chat (cohort channels need admission) |
+| `/dm/[userId]` | Required | 1:1 DM (cohort members only) |
+| `/admin` | Admin | Roster: pending queue + allowlist |
 | `/robots.txt`, `/sitemap.xml`, `/llms.txt` | Public | SEO / agent summary |
 
-Auth gate: `src/proxy.ts` (Next.js 16 Proxy). Public routes above plus
-`/api/webhooks(.*)`. Everything else requires `auth.protect()`.
+Auth gate: [`src/proxy.ts`](src/proxy.ts). Public routes above plus
+`/api/auth/*` and `/api/webhooks/*`. Everything else requires a session.
 
 ## API
 
-Authenticated APIs use `requireUserId` / `syncCurrentUser` except the
-Forth webhook.
-
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/bootstrap` | Me (+ admin), channels + unread, members + presence + DM unread |
-| `POST` | `/api/channels` | Create channel (slugified name, max 32 chars) |
-| `GET` | `/api/messages?scope=` | History + reactions; marks conversation read |
-| `POST` | `/api/messages` | Post text (≤ 8000) or attachment; scopes below |
-| `GET` | `/api/events?scope=&after=` | SSE: `hello` / `message` / `ping` / `error` |
-| `GET` | `/api/search?q=` | FTS (`websearch_to_tsquery`); min 2 chars |
+| `GET` | `/api/bootstrap` | Me (+ admin, cohortMember, pendingCount), channels, members |
+| `POST` | `/api/channels` | Create channel (personal if pending; cohort if admitted) |
+| `GET`/`POST` | `/api/messages` | History / post; `403` if pending on cohort scopes |
+| `GET` | `/api/events` | SSE near-realtime |
+| `GET` | `/api/search` | FTS (cohort members only) |
 | `POST` | `/api/reactions` | Toggle reaction |
-| `GET`/`PATCH` | `/api/notifications` | Bell inbox; mark one/all read |
-| `GET`/`POST` | `/api/typing` | Pulse typing; list typers active in last 4s |
-| `POST` | `/api/upload` | Image only, ~900KB |
-| `POST` | `/api/webhooks/forth` | Inbound board events → channel as Forth bot |
+| `GET`/`PATCH` | `/api/notifications` | Bell inbox (incl. `join_request`) |
+| `GET`/`POST` | `/api/typing` | Typing indicators |
+| `POST` | `/api/upload` | Image upload |
+| `GET`/`POST` | `/api/admin/members` | Admit / revoke / allowlist |
+| `POST` | `/api/webhooks/forth` | Inbound Forth events |
 
 **Scopes:** `channel:<slug>`, `dm:<otherUserId>`, `thread:<rootId>`.
-
-## Demo vs production
-
-| | `/demo` | Signed-in workspace |
-|---|---|---|
-| Data | In-memory React state | Neon Postgres |
-| Auth | None | GitHub OAuth |
-| Forth webhook | Seeded bot message + amber badge | Real `POST /api/webhooks/forth` → DB |
-| Realtime | None | SSE + SWR |
-| Notifications / typing / upload / FTS | Simulated or absent | Full APIs |
-| Persist | Lost on refresh | Durable |
 
 ## Environment
 
@@ -136,11 +149,14 @@ Copy `.env.example` → `.env.local` (or `vercel env pull`).
 |---|---|---|
 | `DATABASE_URL` | Yes | Neon connection string |
 | `AUTH_SECRET` | Yes | Auth.js session secret (`npx auth secret`) |
-| `AUTH_GITHUB_ID` | Yes | GitHub OAuth app client id |
-| `AUTH_GITHUB_SECRET` | Yes | GitHub OAuth app client secret |
-| `FORTH_WEBHOOK_SECRET` | For webhook | Missing → webhook returns `503` |
-| `BLOB_READ_WRITE_TOKEN` | Optional | Vercel Blob uploads; else data URL |
-| `ADMIN_HANDLES` | Optional | Comma-separated handles; default `admin,priyanshshahh` |
+| `AUTH_URL` | Recommended | e.g. `https://cohort-comms-phi.vercel.app` |
+| `AUTH_TRUST_HOST` | Recommended | `true` on Vercel |
+| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | For GitHub | OAuth app; callback `/api/auth/callback/github` |
+| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | For Google | OAuth client; callback `/api/auth/callback/google` |
+| `FORTH_WEBHOOK_SECRET` | For webhook | Missing → `503` |
+| `BLOB_READ_WRITE_TOKEN` | Optional | Vercel Blob uploads |
+| `ADMIN_HANDLES` | Optional | Default `rogerSuperBuilderAlpha,priyanshshahh` |
+| `ADMIN_EMAILS` | Optional | Needed for Google-only admins |
 
 ## Local setup
 
@@ -152,108 +168,34 @@ npm run dev
 ```
 
 ```bash
-npm run build   # production build
-npm test        # vitest (Forth URL allowlist, admin gating, scopes)
+npm run build
+npm test
 npm run lint
 ```
-
-CI (`.github/workflows/ci.yml`): `npm ci` → `npm test` → `npx tsc --noEmit`
-on push/PR to `main`.
 
 ## Architecture
 
 ```
 src/
-  proxy.ts                      Auth gate; public /, /demo, webhook, SEO
-  db/schema.ts                  users, channels, messages, reads, notifications,
-                                typing, reactions
-  lib/data.ts                   scopes, posts, unread, FTS, Forth bot, admins
-  lib/forth.ts                  Forth URL normalize + card labels
-  app/api/webhooks/forth        inbound Forth webhook (secret + allowlist)
-  app/api/events                SSE near-realtime
-  app/api/notifications         bell inbox
-  app/api/upload                image attachments
-  app/api/typing                typing indicators
-  components/DemoWorkspace.tsx  no-signup interactive demo
-  components/ChatView.tsx       SSE, threads, attach, Forth cards
-  components/Shell.tsx          sidebar + Forth iframe pane
+  auth.ts                       Auth.js — GitHub + Google
+  proxy.ts                      Session gate; public /, /demo, /api/auth, webhook
+  db/schema.ts                  users (status), cohort_allowlist, channels…
+  lib/data.ts                   sync, admit, join_request notify, scopes
+  lib/policy.ts                 admins, scopes, Forbidden/Pending errors
+  app/(app)/admin               roster UI
+  app/api/admin/members         admit / revoke / allowlist
+  app/api/webhooks/forth        inbound Forth webhook
+  components/Shell.tsx          pending banner + Roster badge
+  components/AdminRoster.tsx    admin queue
   components/NotificationBell.tsx
-  components/CommandPalette.tsx
 ```
-
-One `messages` table backs channels and DMs (`channel_id` vs sorted `dm_key`).
-Threads use `parent_id` on the same table.
-
-### Schema extras (Neon, not in `schema.ts`)
-
-These are used at runtime and must exist in the database (created via prior
-SQL / push):
-
-- `messages.search_vector` — full-text search
-- `webhook_events(event_id)` — webhook replay dedupe
-
-There is no `drizzle/` migrations folder; schema is applied with
-`drizzle-kit push`.
 
 ## Forth integration
 
-Forth (https://forth-bice.vercel.app, https://github.com/CodingWCal/forth) is
-Next.js + Firebase and does **not** publish outbound webhooks or a public REST
-API today. Cohort Comms ships the **receiving** half of the contract, plus
-embeds and cards. Shipping a ticket on Forth will **not** by itself post into
-chat until Forth (or a relay) calls this endpoint.
-
-### 1. Inbound webhook (receiver live)
-
-`POST /api/webhooks/forth` with header `x-forth-secret` matching
-`FORTH_WEBHOOK_SECRET`. Secret compare is constant-time. Only same-origin Forth
-links are kept; hostile URLs are stripped. Replay protection uses optional
-`payload.id` → `webhook_events` dedupe and optional `sentAt` (±5 min window).
-
-Posts as the Forth bot (`id = forth-bot`, handle `forth`) into
-`payload.channel` or `#general`.
-
-Verified on production (manual curl):
-
-| Case | Result |
-|---|---|
-| Wrong / missing secret | `401` |
-| Missing `ticket.title` | `400` |
-| Valid shipped ticket | `201` — posts as Forth bot into the channel |
-| Payload with `https://evil.example.com/…` | `201`, hostile URL stripped |
-| Missing `FORTH_WEBHOOK_SECRET` | `503` |
-
-```bash
-curl -X POST https://cohort-comms-phi.vercel.app/api/webhooks/forth \
-  -H 'content-type: application/json' \
-  -H 'x-forth-secret: <FORTH_WEBHOOK_SECRET>' \
-  -d '{"event":"ticket.shipped","channel":"general",
-       "ticket":{"title":"Ship Cohort Comms","status":"Shipped",
-                 "assignee":"priyanshshahh",
-                 "url":"https://forth-bice.vercel.app/#chronicle"}}'
-```
-
-Status icons in the bot message: shipped ✅, in forge 🔨, camped ⛺, quest log 📋,
-otherwise ⚒.
-
-### 2. Embedded board
-
-Toggleable split-pane iframe of Forth beside chat (plus “Open in tab”). Mutually
-exclusive with the thread side panel. Embed was checked against Forth response
-headers (no blocking `X-Frame-Options` / frame CSP) before shipping.
-
-### 3. Deep-link cards
-
-Any `forth-bice.vercel.app` URL pasted into chat (or delivered by the webhook)
-renders as a labelled card. Paths are normalized to Forth’s SPA hash routes
-(`/#board`, `/#chronicle`, …) so Open does not 404 — Forth only serves `/`
-server-side; client views are React state.
-
-### 4. Shared identity
-
-Sign in with the same GitHub account you use on Forth (
-Google/GitHub on Forth). That is the curriculum’s cross-tool identity story,
-not a technical SSO link.
+Forth does **not** publish outbound webhooks. Comms ships the inbound receiver
+at `POST /api/webhooks/forth` (shared secret, URL allowlist, replay protection).
+Shipping a ticket on Forth will not post into chat until Forth or a relay calls
+that endpoint.
 
 ## Links
 

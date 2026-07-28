@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ForbiddenError,
+  PendingApprovalError,
   listMessages,
   markRead,
   parseScope,
@@ -31,7 +32,10 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     // Answer 403 loudly rather than returning an empty list, so a probe of
     // someone else's conversation is unambiguous in the logs.
-    if (error instanceof ForbiddenError) {
+    if (
+      error instanceof ForbiddenError ||
+      error instanceof PendingApprovalError
+    ) {
       return NextResponse.json({ error: error.message }, { status: 403 })
     }
     throw error
@@ -82,7 +86,10 @@ export async function POST(request: NextRequest) {
     if (row) await markRead(scope, meId, row.id)
     return NextResponse.json({ message: row }, { status: 201 })
   } catch (error) {
-    if (error instanceof ForbiddenError) {
+    if (
+      error instanceof ForbiddenError ||
+      error instanceof PendingApprovalError
+    ) {
       return NextResponse.json({ error: error.message }, { status: 403 })
     }
     const reason = error instanceof Error ? error.message : 'send failed'

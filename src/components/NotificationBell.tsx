@@ -24,6 +24,7 @@ function kindLabel(kind: string) {
   if (kind === 'mention') return 'mentioned you'
   if (kind === 'dm') return 'sent a DM'
   if (kind === 'reply') return 'replied in a thread'
+  if (kind === 'join_request') return 'wants to join the cohort'
   return kind
 }
 
@@ -114,7 +115,7 @@ export default function NotificationBell() {
             <ul className="max-h-80 overflow-y-auto">
               {items.length === 0 && (
                 <li className="px-3 py-4 text-xs text-muted">
-                  Mentions, DMs, and thread replies show up here.
+                  Mentions, DMs, thread replies, and join requests show up here.
                 </li>
               )}
               {items.map((item) => (

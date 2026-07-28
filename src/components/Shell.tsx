@@ -40,6 +40,7 @@ type Bootstrap = {
     cohortMember: boolean
     avatarUrl: string | null
   }
+  pendingCount?: number
   channels: Channel[]
   members: Member[]
 }
@@ -196,9 +197,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/admin"
                 title="Cohort roster"
-                className="rounded-md px-1.5 py-1 text-sm text-muted hover:bg-hover hover:text-fg"
+                className="relative rounded-md px-1.5 py-1 text-sm text-muted hover:bg-hover hover:text-fg"
               >
                 Roster
+                {(data?.pendingCount ?? 0) > 0 && (
+                  <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold text-on-accent">
+                    {(data?.pendingCount ?? 0) > 9
+                      ? '9+'
+                      : data?.pendingCount}
+                  </span>
+                )}
               </Link>
             )}
             <NotificationBell />
@@ -211,8 +219,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <div className="rounded-lg border border-line bg-raised p-3 text-xs">
             <p className="font-semibold">Your own space</p>
             <p className="pt-1 text-muted">
-              You&rsquo;re signed in and can create channels here. The cohort&rsquo;s
-              channels open up once an admin admits you.
+              You&rsquo;re signed in and can create channels here. Admins have
+              been notified — the cohort&rsquo;s channels open once they admit
+              you.
             </p>
           </div>
         )}
