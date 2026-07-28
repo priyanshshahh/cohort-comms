@@ -57,10 +57,29 @@ registers as `pending` until an admin admits them.
 
 ### Not implemented
 
-- Message edit / delete (`edited_at` exists; no API or UI)
 - Nested threads / group DMs
 - Push / email notifications (in-app bell only)
 - Automatic Forth → Comms posts on ticket ship
+
+### Known limitations
+
+These are real gaps, not oversights waiting to be discovered. Each one has an
+open issue with context and a suggested starting point, and each is open for
+anyone to pick up. Nothing here blocks day-to-day use; the first two are what
+stand between this and being something a cohort should fully depend on.
+
+| Limitation | Impact | Issue |
+|---|---|---|
+| No message delete or edit | A message with a leaked key or a regretted screenshot is permanent short of manual SQL | [#19](https://github.com/priyanshshahh/cohort-comms/issues/19) |
+| Attachments stored in Postgres when Blob is unset | Database grows fast; encoded bytes ride along in every channel fetch | [#20](https://github.com/priyanshshahh/cohort-comms/issues/20) |
+| No rate limiting | One user or a bad retry loop can flood a channel and the row quota | [#21](https://github.com/priyanshshahh/cohort-comms/issues/21) |
+| No error monitoring | Production failures are found by someone noticing, not by an alert | [#22](https://github.com/priyanshshahh/cohort-comms/issues/22) |
+| No verified backup / restore | Neon retention unconfirmed, restore never tested, migrations applied by hand | [#23](https://github.com/priyanshshahh/cohort-comms/issues/23) |
+
+Picking one up: comment on the issue first so two people do not start the same
+work. Authorization rules belong in `src/lib/policy.ts`, which imports nothing
+but the standard library, with tests in `tests/security.test.ts`. CI runs
+`npm test` and `tsc --noEmit` on every pull request.
 
 ## Stack
 
