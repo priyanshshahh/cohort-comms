@@ -17,6 +17,8 @@ export * from './policy'
 import {
   assertThreadRootReadable,
   isAdmin,
+  adminEmails,
+  adminHandles,
   dmKeyFor,
   ForbiddenError,
   isAdminHandle,
@@ -270,6 +272,14 @@ export async function syncCurrentUser() {
   const admitted =
     isAdmin(handle, email) || (email ? await isOnAllowlist(email) : false)
 
+  // Detect a brand-new account so we notify admins once, not on every login.
+  const [existingBefore] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1)
+  const isNewAccount = !existingBefore
+
   const [row] = await db
     .insert(users)
     .values({
@@ -297,13 +307,19 @@ export async function syncCurrentUser() {
     })
     .returning({ status: users.status })
 
+  const status = row?.status ?? (admitted ? 'active' : 'pending')
+
+  if (isNewAccount && status === 'pending') {
+    await notifyAdminsOfJoinRequest(id, handle)
+  }
+
   return {
     id,
     handle,
     name,
     avatarUrl: user.image ?? null,
     email,
-    status: row?.status ?? (admitted ? 'active' : 'pending'),
+    status,
   }
 }
 
@@ -362,6 +378,62 @@ export async function listPendingMembers() {
     .from(users)
     .where(eq(users.status, 'pending'))
     .orderBy(desc(users.createdAt))
+}
+
+/** How many accounts are waiting for an admin to admit them. */
+export async function countPendingMembers(): Promise<number> {
+  const db = getDb()
+  const [row] = await db
+    .select({ total: count() })
+    .from(users)
+    .where(eq(users.status, 'pending'))
+  return Number(row?.total ?? 0)
+}
+
+/**
+ * Bell every signed-in admin when someone registers and is waiting on admit.
+ * No-ops if no admin has signed in yet (they will see the queue on /admin).
+ */
+export async function notifyAdminsOfJoinRequest(
+  actorId: string,
+  handle: string
+) {
+  const db = getDb()
+  const handles = adminHandles()
+  const emails = adminEmails()
+
+  const conditions = []
+  if (handles.length > 0) {
+    conditions.push(
+      sql`lower(${users.handle}) in (${sql.join(
+        handles.map((h) => sql`${h}`),
+        sql`, `
+      )})`
+    )
+  }
+  if (emails.length > 0) {
+    conditions.push(inArray(users.email, emails))
+  }
+  if (conditions.length === 0) return
+
+  const admins = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(or(...conditions))
+
+  const recipients = admins.filter((a) => a.id !== actorId)
+  if (recipients.length === 0) return
+
+  await db.insert(notifications).values(
+    recipients.map((admin) => ({
+      userId: admin.id,
+      actorId,
+      kind: 'join_request',
+      messageId: null,
+      scope: 'admin:roster',
+      preview: `@${handle} asked to join the cohort`,
+    }))
+  )
 }
 
 /** Admit a single pending account. */
@@ -757,6 +829,7 @@ export async function listNotifications(meId: string, limit = 30) {
 }
 
 function hrefForScope(scope: string, meId: string): string {
+  if (scope === 'admin:roster' || scope.startsWith('admin:')) return '/admin'
   if (scope.startsWith('channel:')) return `/c/${scope.slice('channel:'.length)}`
   if (scope.startsWith('dm:')) {
     const key = scope.slice('dm:'.length)

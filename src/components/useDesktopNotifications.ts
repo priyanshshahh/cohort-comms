@@ -56,11 +56,12 @@ function labelFor(kind: string) {
   if (kind === 'mention') return 'mentioned you'
   if (kind === 'dm') return 'sent you a DM'
   if (kind === 'reply') return 'replied to your thread'
+  if (kind === 'join_request') return 'wants to join the cohort'
   return 'sent an update'
 }
 
 /**
- * Desktop notifications for mentions, DMs and thread replies.
+ * Desktop notifications for mentions, DMs, thread replies, and join requests.
  *
  * The in-app bell only helps someone already looking at the tab, which is the
  * case that needs no help. This fires when the tab is hidden, which is when a

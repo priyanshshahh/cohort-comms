@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import GitHub from 'next-auth/providers/github'
 import Google from 'next-auth/providers/google'
+import type { Provider } from 'next-auth/providers'
 
 /**
  * Authentication for the cohort platform.
@@ -20,16 +21,37 @@ import Google from 'next-auth/providers/google'
  * JWT sessions rather than a database adapter. The app already mirrors members
  * into its own `users` table on sign-in and keys everything off that, so an
  * adapter would add a second source of truth for no benefit.
+ *
+ * Only register providers that have credentials. Auth.js throws a
+ * Configuration error if Google/GitHub sit in the array with a missing
+ * client_id — which is what `/api/auth/error?error=Configuration` was.
  */
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
+const providers: Provider[] = []
+
+if (process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET) {
+  providers.push(
     GitHub({
       // `read:user` and `user:email` so we can resolve a handle and the
       // primary email the roster is matched against.
+      clientId: process.env.AUTH_GITHUB_ID,
+      clientSecret: process.env.AUTH_GITHUB_SECRET,
       authorization: { params: { scope: 'read:user user:email' } },
-    }),
-    Google,
-  ],
+    })
+  )
+}
+
+if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
+  providers.push(
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
+    })
+  )
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  providers,
+  trustHost: true,
   pages: {
     signIn: '/sign-in',
   },

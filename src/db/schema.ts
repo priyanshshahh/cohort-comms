@@ -11,8 +11,9 @@ import {
 } from 'drizzle-orm/pg-core'
 
 /**
- * Cohort members. `id` is the Clerk user id, so Clerk stays the source of
- * truth for identity and this table only caches display data + presence.
+ * Cohort members. `id` is the OAuth provider account id (GitHub or Google).
+ * Auth.js is the identity source of truth; this table caches display data,
+ * presence, and cohort admission status.
  */
 export const users = pgTable('users', {
   id: text('id').primaryKey(),
@@ -99,9 +100,11 @@ export const messages = pgTable(
 )
 
 /**
- * In-app alerts for @mentions, DM arrivals, and thread replies.
+ * In-app alerts for @mentions, DM arrivals, thread replies, and join requests.
  * Separate from `reads` (conversation unread) so the bell can surface
  * actionable events without changing channel badges.
+ *
+ * `messageId` is null for join_request alerts (no chat message to open).
  */
 export const notifications = pgTable(
   'notifications',
@@ -110,7 +113,7 @@ export const notifications = pgTable(
     userId: text('user_id').notNull(),
     actorId: text('actor_id').notNull(),
     kind: text('kind').notNull(),
-    messageId: integer('message_id').notNull(),
+    messageId: integer('message_id'),
     scope: text('scope').notNull(),
     preview: text('preview').notNull(),
     readAt: timestamp('read_at'),

@@ -23,7 +23,7 @@ const PILLARS = [
 const PATH = [
   'Open the demo (no signup)',
   'Spot the WEBHOOK badge in #general',
-  'Join workspace → Live badge, bell inbox, attach image',
+  'Sign in → personal space while an admin admits you',
 ]
 
 export default async function Landing() {
@@ -50,10 +50,9 @@ export default async function Landing() {
             Cohort Comms
           </h1>
           <p className="max-w-xl pt-5 text-lg leading-relaxed text-muted">
-            The cohort channel next to the cohort board. Threads and @mentions
-            for async work — plus a live{' '}
-            <span className="text-pm">Forth</span> webhook so shipped tickets
-            post themselves into chat.
+            The cohort channel next to the cohort board. Anyone can sign in with
+            GitHub or Google — you get your own space right away, and an admin
+            admits you into the shared cohort workspace.
           </p>
         </div>
 
@@ -65,10 +64,10 @@ export default async function Landing() {
             Open live demo — no signup
           </Link>
           <Link
-            href="/sign-up"
+            href="/sign-in"
             className="rounded-lg border border-line bg-panel/80 px-5 py-3 text-sm font-semibold backdrop-blur hover:bg-raised"
           >
-            Join the workspace
+            Sign in / register
           </Link>
           <a
             href={FORTH_BASE_URL}

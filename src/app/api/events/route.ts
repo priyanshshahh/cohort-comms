@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import {
   ForbiddenError,
+  PendingApprovalError,
   latestMessageId,
   parseScope,
   requireUserId,
@@ -36,7 +37,10 @@ export async function GET(request: NextRequest) {
   try {
     await latestMessageId(scope, meId)
   } catch (error) {
-    if (error instanceof ForbiddenError) {
+    if (
+      error instanceof ForbiddenError ||
+      error instanceof PendingApprovalError
+    ) {
       return new Response(error.message, { status: 403 })
     }
     throw error

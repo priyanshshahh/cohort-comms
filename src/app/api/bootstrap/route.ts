@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import {
+  countPendingMembers,
   dmKeyFor,
   isAdmin as isAdminMember,
   listChannels,
@@ -20,19 +21,20 @@ export async function GET() {
 
   // Admission decides what the sidebar contains, not whether it renders.
   const cohortMember = me.status === 'active'
+  const isAdmin = isAdminMember(me.handle, me.email)
 
-  const [channelRows, memberRows, unread] = await Promise.all([
+  const [channelRows, memberRows, unread, pendingCount] = await Promise.all([
     listChannels(me.id, cohortMember),
     // The roster is a cohort surface. Someone still pending sees no one, so
     // signing up cannot be used to enumerate the cohort.
     cohortMember ? listMembers() : Promise.resolve([]),
     unreadByScope(me.id),
+    isAdmin ? countPendingMembers() : Promise.resolve(0),
   ])
-
-  const isAdmin = isAdminMember(me.handle, me.email)
 
   return NextResponse.json({
     me: { ...me, isAdmin, cohortMember },
+    pendingCount,
     channels: channelRows
       .filter((c) => !c.archived)
       .map((c) => ({
