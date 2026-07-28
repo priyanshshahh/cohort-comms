@@ -33,7 +33,9 @@ function kindLabel(kind: string) {
 /** Caller: Shell.tsx beside ThemeToggle. API: GET/PATCH /api/notifications. */
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // No `mounted` flag: `coords` is only ever set from a layout effect, which
+  // never runs on the server, so it doubles as the client-only guard the
+  // portal needs.
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
     null
   )
@@ -45,10 +47,6 @@ export default function NotificationBell() {
     fetcher,
     { refreshInterval: 4000 }
   )
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useLayoutEffect(() => {
     if (!open || !button.current) {
@@ -118,7 +116,6 @@ export default function NotificationBell() {
   const panel =
     open &&
     coords &&
-    mounted &&
     createPortal(
       <AnimatePresence>
         <motion.div

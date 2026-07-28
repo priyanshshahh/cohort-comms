@@ -16,16 +16,14 @@ export default function SignOut({
   avatarUrl: string | null
 }) {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  // No `mounted` flag: `coords` is only ever set from a layout effect, which
+  // never runs on the server, so it doubles as the client-only guard the
+  // portal needs.
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
     null
   )
   const button = useRef<HTMLButtonElement>(null)
   const menu = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   useLayoutEffect(() => {
     if (!open || !button.current) {
@@ -76,7 +74,6 @@ export default function SignOut({
   const panel =
     open &&
     coords &&
-    mounted &&
     createPortal(
       <div
         ref={menu}
