@@ -1,4 +1,3 @@
-import PendingApproval from '@/components/PendingApproval'
 import Shell from '@/components/Shell'
 import { ensureSeedChannels, syncCurrentUser } from '@/lib/data'
 
@@ -13,17 +12,10 @@ export default async function AppLayout({
   // brand-new cohort member lands in a populated workspace.
   // Independent writes — running them in parallel removes a round-trip from
   // every authenticated page load (async-parallel).
-  const [, member] = await Promise.all([
-    ensureSeedChannels(),
-    syncCurrentUser(),
-  ])
+  await Promise.all([ensureSeedChannels(), syncCurrentUser()])
 
-  // Registration does not grant entry. Anyone not admitted gets the waiting
-  // screen instead of the workspace, so no channel, roster or message ever
-  // renders for them. The API routes enforce the same rule independently.
-  if (member && member.status !== 'active') {
-    return <PendingApproval name={member.name} email={member.email} />
-  }
-
+  // Signing in gets you into the app. The cohort's own channels stay closed
+  // until an admin admits you, which the sidebar reflects and the API routes
+  // enforce independently; being pending is not a reason to see nothing.
   return <Shell>{children}</Shell>
 }

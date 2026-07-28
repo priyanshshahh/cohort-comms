@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/db'
 import { channels } from '@/db/schema'
-import { ForbiddenError, requireAdminId, requireUserId } from '@/lib/data'
+import {
+  ForbiddenError,
+  isCohortMember,
+  requireAdminId,
+  requireUserId,
+} from '@/lib/data'
 
 /** Lowercase, hyphenated, no leading/trailing separators. */
 function slugify(input: string): string {
@@ -32,10 +37,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid channel name' }, { status: 400 })
   }
 
+  /**
+   * An admitted member opens a channel for the cohort. Someone still pending
+   * opens one in their own space, which is what lets them use the app straight
+   * after signing up without touching the cohort's channels.
+   *
+   * Personal slugs are namespaced so two people can both have "#notes" without
+   * colliding on the unique slug.
+   */
+  const cohortMember = await isCohortMember()
+  const ownerId = cohortMember ? null : meId
+  const finalSlug = cohortMember ? slug : `u-${meId}-${slug}`.slice(0, 64)
+
   const db = getDb()
   const inserted = await db
     .insert(channels)
-    .values({ slug, name: slug, description, createdBy: meId })
+    .values({
+      slug: finalSlug,
+      name: slug,
+      description,
+      ownerId,
+      createdBy: meId,
+    })
     .onConflictDoNothing()
     .returning()
 

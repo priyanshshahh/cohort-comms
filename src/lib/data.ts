@@ -83,23 +83,18 @@ export async function requireSignedInUserId(): Promise<string> {
 }
 
 /**
- * The signed-in member's id, refusing anyone the cohort has not admitted.
+ * Resolve the signed-in session to a row in `users`.
  *
- * Signup is deliberately open — a member whose personal email is not on the
- * roster can still register and ask to be let in — so registration alone must
- * not grant access to the space. The check lives here rather than in each
- * route because every API route already calls this function: a route added
- * later inherits the gate instead of being forgotten.
+ * Matches on the provider id or the email, because a member who signed up
+ * with GitHub and later signs in with Google arrives with a different
+ * provider id but keeps their original row. Looking up by id alone would lock
+ * them out of their own account.
  */
-export async function requireUserId(): Promise<string> {
+async function currentUserRow() {
   const session = await auth()
   const sessionId = session?.user?.id
   if (!sessionId) throw new Error('unauthorized')
 
-  // Match on the provider id or the email, because a member who signed up
-  // with GitHub and later signs in with Google arrives with a different
-  // provider id but keeps their original row. Looking up by id alone would
-  // lock them out of their own account.
   const email = session.user.email?.trim().toLowerCase() ?? null
   const db = getDb()
   const [row] = await db
@@ -112,8 +107,39 @@ export async function requireUserId(): Promise<string> {
     )
     .limit(1)
 
-  if (row?.status !== 'active') throw new PendingApprovalError()
+  if (!row) throw new Error('unauthorized')
+  return row
+}
+
+/**
+ * The signed-in member's id. Signing in is enough.
+ *
+ * Registering gets you into the app, where you can make your own channels and
+ * use it as your own space. It does not get you into the cohort's channels:
+ * that is `requireCohortMember`. Conflating the two meant anyone not yet
+ * admitted was locked out of the product entirely, which was never the intent.
+ */
+export async function requireUserId(): Promise<string> {
+  return (await currentUserRow()).id
+}
+
+/**
+ * The signed-in member's id, refusing anyone the cohort has not admitted.
+ *
+ * Guards the shared cohort surfaces: its channels, the member roster, DMs.
+ * Signup stays open so someone whose personal email is not on the roster can
+ * still register and ask to be let in.
+ */
+export async function requireCohortMember(): Promise<string> {
+  const row = await currentUserRow()
+  if (row.status !== 'active') throw new PendingApprovalError()
   return row.id
+}
+
+/** True when this member has been admitted to the cohort workspace. */
+export async function isCohortMember(): Promise<boolean> {
+  const row = await currentUserRow().catch(() => null)
+  return row?.status === 'active'
 }
 
 /** The signed-in member's row, or null before they have been synced. */
@@ -148,6 +174,28 @@ export async function requireAdminId(): Promise<string> {
   return userId
 }
 
+/**
+ * One gate for every conversation scope.
+ *
+ * Channel access depends on whether the channel is the cohort's or the
+ * caller's own; DMs are a cohort surface outright, since someone still pending
+ * has no roster to message. Threads defer to their root.
+ *
+ * Called by every read and write path so a pending account cannot reach a
+ * cohort conversation through any route, present or future.
+ */
+export async function requireScopeAccess(scope: Scope, meId: string) {
+  if (scope.kind === 'channel') {
+    await requireReadableChannel(scope.slug, meId)
+    return
+  }
+  if (scope.kind === 'dm') {
+    if (!(await isCohortMember())) throw new PendingApprovalError()
+    return
+  }
+  await requireReadableThreadRoot(scope.rootId, meId)
+}
+
 /** Load a thread root and prove the caller is allowed to read it. */
 async function requireReadableThreadRoot(rootId: number, meId: string) {
   const db = getDb()
@@ -158,6 +206,18 @@ async function requireReadableThreadRoot(rootId: number, meId: string) {
     .limit(1)
 
   assertThreadRootReadable(root, meId)
+
+  // A thread hanging off a channel inherits that channel's access rules, or a
+  // pending account could reach cohort discussion through a reply id.
+  if (root.channelId) {
+    const [channel] = await db
+      .select({ slug: channels.slug })
+      .from(channels)
+      .where(eq(channels.id, root.channelId))
+      .limit(1)
+    if (channel) await requireReadableChannel(channel.slug, meId)
+  }
+
   return root
 }
 
@@ -365,9 +425,43 @@ export async function ensureSeedChannels() {
   await db.insert(channels).values(DEFAULT_CHANNELS).onConflictDoNothing()
 }
 
-export async function listChannels() {
+/**
+ * Channels this member may see.
+ *
+ * An admitted member sees the cohort's shared channels plus their own. Someone
+ * still pending sees only their own, so the app is usable from the moment they
+ * sign up without exposing a single cohort message.
+ */
+export async function listChannels(meId: string, cohortMember: boolean) {
   const db = getDb()
-  return db.select().from(channels).orderBy(asc(channels.id))
+  const mine = eq(channels.ownerId, meId)
+  return db
+    .select()
+    .from(channels)
+    .where(cohortMember ? or(isNull(channels.ownerId), mine) : mine)
+    .orderBy(asc(channels.id))
+}
+
+/** Guard for a single channel, used before reading or posting in it. */
+export async function requireReadableChannel(slug: string, meId: string) {
+  const db = getDb()
+  const [channel] = await db
+    .select()
+    .from(channels)
+    .where(eq(channels.slug, slug))
+    .limit(1)
+
+  if (!channel) throw new ForbiddenError('channel not found')
+
+  // Someone else's personal channel is never readable.
+  if (channel.ownerId && channel.ownerId !== meId) {
+    throw new ForbiddenError('not your channel')
+  }
+  // A cohort channel requires admission.
+  if (!channel.ownerId && !(await isCohortMember())) {
+    throw new PendingApprovalError()
+  }
+  return channel
 }
 
 export async function listMembers() {
@@ -396,9 +490,10 @@ const MESSAGE_FIELDS = {
 export async function listMessages(scope: Scope, meId: string) {
   const db = getDb()
 
+  // Throws unless this caller may read this conversation at all.
+  await requireScopeAccess(scope, meId)
+
   if (scope.kind === 'thread') {
-    // Throws unless this caller may read the root's conversation.
-    await requireReadableThreadRoot(scope.rootId, meId)
 
     // The root message first, then its replies in order.
     const rows = await db
@@ -532,10 +627,11 @@ export async function postMessage(
 export async function latestMessageId(scope: Scope, meId: string) {
   const db = getDb()
 
+  // Same gate as the read path, so /api/events cannot be used as a side
+  // channel to watch a conversation you cannot open.
+  await requireScopeAccess(scope, meId)
+
   if (scope.kind === 'thread') {
-    // Same gate as the read path, so /api/events cannot be used as a side
-    // channel to watch a stranger's DM for activity.
-    await requireReadableThreadRoot(scope.rootId, meId)
 
     const [row] = await db
       .select({ id: max(messages.id) })

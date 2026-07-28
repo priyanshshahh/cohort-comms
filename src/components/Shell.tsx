@@ -32,7 +32,14 @@ type Member = {
 }
 
 type Bootstrap = {
-  me: { id: string; handle: string; name: string; isAdmin: boolean; avatarUrl: string | null }
+  me: {
+    id: string
+    handle: string
+    name: string
+    isAdmin: boolean
+    cohortMember: boolean
+    avatarUrl: string | null
+  }
   channels: Channel[]
   members: Member[]
 }
@@ -199,6 +206,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <SignOut name={me?.name ?? 'Member'} avatarUrl={me?.avatarUrl ?? null} />
           </div>
         </div>
+
+        {me && !me.cohortMember && (
+          <div className="rounded-lg border border-line bg-raised p-3 text-xs">
+            <p className="font-semibold">Your own space</p>
+            <p className="pt-1 text-muted">
+              You&rsquo;re signed in and can create channels here. The cohort&rsquo;s
+              channels open up once an admin admits you.
+            </p>
+          </div>
+        )}
 
         <CommandPalette channels={channels} members={members} />
 
