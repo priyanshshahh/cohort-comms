@@ -176,7 +176,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             {totalUnread}
           </span>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5">
+          {me?.isAdmin && (
+            <Link
+              href="/admin"
+              title="Cohort roster"
+              className="relative rounded-md px-1.5 py-1 text-sm text-muted hover:bg-hover hover:text-fg"
+            >
+              Roster
+              {(data?.pendingCount ?? 0) > 0 && (
+                <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold text-on-accent">
+                  {(data?.pendingCount ?? 0) > 9 ? '9+' : data?.pendingCount}
+                </span>
+              )}
+            </Link>
+          )}
           <NotificationBell />
           <ThemeToggle />
           <SignOut name={me?.name ?? 'Member'} avatarUrl={me?.avatarUrl ?? null} />
@@ -186,13 +200,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <aside
         className={`${
           mobileOpen ? 'flex' : 'hidden'
-        } absolute inset-y-0 left-0 z-20 w-72 flex-col gap-4 overflow-y-auto border-r border-line bg-panel px-4 pb-6 pt-20 md:static md:flex md:pt-5`}
+        } absolute inset-y-0 left-0 z-20 w-72 flex-col border-r border-line bg-panel pt-20 md:static md:flex md:pt-5`}
       >
-        <div className="hidden items-center gap-2 md:flex">
-          <span className="text-lg font-semibold tracking-tight">
+        <div className="hidden shrink-0 items-center gap-2 px-4 pb-3 md:flex">
+          <span className="min-w-0 truncate text-lg font-semibold tracking-tight">
             Cohort Comms
           </span>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {me?.isAdmin && (
               <Link
                 href="/admin"
@@ -215,6 +229,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-6">
         {me && !me.cohortMember && (
           <div className="rounded-lg border border-line bg-raised p-3 text-xs">
             <p className="font-semibold">Your own space</p>
@@ -371,6 +386,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             )}
           </ul>
         </nav>
+        </div>
       </aside>
 
       <main id="main" className="flex min-w-0 flex-1 flex-col pt-14 md:pt-0">
