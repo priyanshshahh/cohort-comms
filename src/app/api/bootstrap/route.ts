@@ -18,16 +18,21 @@ export async function GET() {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
+  // Admission decides what the sidebar contains, not whether it renders.
+  const cohortMember = me.status === 'active'
+
   const [channelRows, memberRows, unread] = await Promise.all([
-    listChannels(),
-    listMembers(),
+    listChannels(me.id, cohortMember),
+    // The roster is a cohort surface. Someone still pending sees no one, so
+    // signing up cannot be used to enumerate the cohort.
+    cohortMember ? listMembers() : Promise.resolve([]),
     unreadByScope(me.id),
   ])
 
   const isAdmin = isAdminMember(me.handle, me.email)
 
   return NextResponse.json({
-    me: { ...me, isAdmin },
+    me: { ...me, isAdmin, cohortMember },
     channels: channelRows
       .filter((c) => !c.archived)
       .map((c) => ({

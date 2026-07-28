@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireUserId, searchMessages } from '@/lib/data'
+import { requireCohortMember, searchMessages } from '@/lib/data'
 
 /** GET /api/search?q=deploy — keyword search across channels and own DMs. */
 export async function GET(request: NextRequest) {
   let meId: string
   try {
-    meId = await requireUserId()
+    meId = await requireCohortMember()
   } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }

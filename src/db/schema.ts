@@ -54,6 +54,14 @@ export const channels = pgTable('channels', {
   /** Only cohort admins may post; everyone may read. Used by #announcements. */
   adminOnly: boolean('admin_only').notNull().default(false),
   archived: boolean('archived').notNull().default(false),
+  /**
+   * Null means this is a cohort channel, shared with every admitted member.
+   * A user id means it is that person's own channel, visible only to them.
+   *
+   * This is what lets anyone sign up and start using the app immediately
+   * while the cohort's own channels stay closed until an admin admits them.
+   */
+  ownerId: text('owner_id'),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
