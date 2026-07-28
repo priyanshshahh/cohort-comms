@@ -113,6 +113,17 @@ describe('admin identification across providers', () => {
     expect(isAdmin('member', 'member@example.edu')).toBe(false)
   })
 
+  it('recognises an admin with no roster entry, so launch cannot deadlock', () => {
+    // On a fresh database cohort_allowlist is empty. If admin status depended
+    // on the roster, the first sign-in would be pending, /admin would refuse
+    // the only people who could fix it, and nobody could ever be admitted.
+    delete process.env.ADMIN_HANDLES
+    delete process.env.ADMIN_EMAILS
+    expect(isAdmin('rogerSuperBuilderAlpha', 'anything@example.com')).toBe(true)
+    expect(isAdmin('priyanshshahh', null)).toBe(true)
+    expect(isAdmin('a-regular-member', 'member@example.edu')).toBe(false)
+  })
+
   it('falls back to the defaults when ADMIN_HANDLES is blank', () => {
     // Vercel stores an empty string for a variable created without a value.
     // Treating that as "configured" would leave the cohort with no admins and

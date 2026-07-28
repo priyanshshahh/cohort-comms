@@ -199,7 +199,16 @@ export async function syncCurrentUser() {
 
   // Anyone the admins have already put on the roster is admitted on sight, so
   // the common case is: click the link, sign in, land in the cohort space.
-  const admitted = email ? await isOnAllowlist(email) : false
+  /**
+   * Admins admit themselves.
+   *
+   * Without this the platform deadlocks on a fresh database: the roster is
+   * empty, so the first sign-in is `pending`, and `/admin` sits behind
+   * `requireUserId`, which refuses anyone pending. Nobody could reach the
+   * screen that admits people, including the person who owns it.
+   */
+  const admitted =
+    isAdmin(handle, email) || (email ? await isOnAllowlist(email) : false)
 
   const [row] = await db
     .insert(users)
