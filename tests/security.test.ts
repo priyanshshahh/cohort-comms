@@ -6,6 +6,7 @@ import {
 } from '../src/lib/forth'
 import {
   assertThreadRootReadable,
+  attachmentStorageMode,
   dmKeyFor,
   ForbiddenError,
   isAdmin,
@@ -303,5 +304,22 @@ describe('cohort roster parsing', () => {
   it('returns nothing for empty or whitespace input', () => {
     expect(parseEmailList('')).toEqual([])
     expect(parseEmailList('   \n  ')).toEqual([])
+  })
+})
+
+describe('attachment storage (issue #20)', () => {
+  it('refuses uploads in production without Blob, rather than swelling the database', () => {
+    expect(attachmentStorageMode(false, 'production')).toBe('disabled')
+  })
+
+  it('keeps the data-URL fallback for local development', () => {
+    expect(attachmentStorageMode(false, 'development')).toBe('data-url')
+    expect(attachmentStorageMode(false, 'test')).toBe('data-url')
+    expect(attachmentStorageMode(false, undefined)).toBe('data-url')
+  })
+
+  it('prefers Blob whenever the token exists, in every environment', () => {
+    expect(attachmentStorageMode(true, 'production')).toBe('blob')
+    expect(attachmentStorageMode(true, 'development')).toBe('blob')
   })
 })
