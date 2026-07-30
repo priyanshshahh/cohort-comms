@@ -146,6 +146,21 @@ export function assertThreadRootReadable(
 }
 
 /**
+ * Where an uploaded attachment may be stored (issue #20). Blob whenever the
+ * token is configured. Without it, the inline data-URL fallback is fine for a
+ * local demo and wrong for the cohort: encoded bytes swell the message rows
+ * and ride along in every fetch. So production without Blob refuses uploads
+ * instead of quietly growing the database.
+ */
+export function attachmentStorageMode(
+  hasBlobToken: boolean,
+  nodeEnv: string | undefined
+): 'blob' | 'data-url' | 'disabled' {
+  if (hasBlobToken) return 'blob'
+  return nodeEnv === 'production' ? 'disabled' : 'data-url'
+}
+
+/**
  * Split a pasted roster into clean, unique emails.
  * Admins paste from a spreadsheet or an email client, so accept commas,
  * newlines, semicolons and spaces rather than demanding one format.
