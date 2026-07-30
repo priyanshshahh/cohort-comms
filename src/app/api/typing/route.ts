@@ -6,6 +6,7 @@ import {
   requireUserId,
   scopeKey,
 } from '@/lib/data'
+import { rateLimited } from '@/lib/rateLimit'
 
 /** GET /api/typing?scope= — who is typing right now. */
 export async function GET(request: NextRequest) {
@@ -32,6 +33,10 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const limited = await rateLimited(meId, 'typing')
+  if (limited) return limited
+
   const payload = await request.json().catch(() => ({}))
   const scope = parseScope(
     typeof payload?.scope === 'string' ? payload.scope : null

@@ -3,6 +3,7 @@ import {
   serial,
   text,
   timestamp,
+  bigint,
   boolean,
   integer,
   index,
@@ -177,6 +178,26 @@ export const webhookEvents = pgTable('webhook_events', {
   eventId: text('event_id').primaryKey(),
   receivedAt: timestamp('received_at').notNull().defaultNow(),
 })
+
+/**
+ * Per-user write throttling (issue #21). One row per user + path bucket +
+ * minute window; `src/lib/rateLimit.ts` reads the two adjacent windows for a
+ * sliding count and prunes a key's stale windows as fresh ones open, so the
+ * table holds at most two rows per user + bucket.
+ *
+ * `window_start` is epoch milliseconds rather than a timestamp because the
+ * limiter does arithmetic on it, never displays it.
+ */
+export const rateLimits = pgTable(
+  'rate_limits',
+  {
+    userId: text('user_id').notNull(),
+    bucket: text('bucket').notNull(),
+    windowStart: bigint('window_start', { mode: 'number' }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.bucket, t.windowStart] })]
+)
 
 export type User = typeof users.$inferSelect
 export type Channel = typeof channels.$inferSelect
