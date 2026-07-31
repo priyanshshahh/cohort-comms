@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { requireUserId } from '@/lib/data'
+import { rateLimited } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 
@@ -12,11 +13,15 @@ const MAX_BYTES = 900_000
  * data URL stored on the message row (fine at cohort scale for small images).
  */
 export async function POST(request: NextRequest) {
+  let meId: string
   try {
-    await requireUserId()
+    meId = await requireUserId()
   } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const limited = await rateLimited(meId, 'upload')
+  if (limited) return limited
 
   const form = await request.formData().catch(() => null)
   const file = form?.get('file')

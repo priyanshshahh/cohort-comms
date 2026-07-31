@@ -141,6 +141,24 @@ Auth gate: [`src/proxy.ts`](src/proxy.ts). Public routes above plus
 
 **Scopes:** `channel:<slug>`, `dm:<otherUserId>`, `thread:<rootId>`.
 
+## Rate limits
+
+Write endpoints are throttled per authenticated user over a sliding one-minute
+window (issue #21):
+
+| Endpoint | Limit per minute |
+|---|---|
+| `POST /api/messages` | 30 |
+| `POST /api/reactions` | 60 |
+| `POST /api/typing` | 120 |
+| `POST /api/upload` | 12 |
+
+Over the limit returns `429` with a `Retry-After` header. The counters live in
+Postgres (`rate_limits`, created by `scripts/add-rate-limits.sql`), no new
+dependency; at most two rows per user and endpoint. If the limiter itself
+errors, the write proceeds (fail open), so a limiter fault can never take
+posting down. Limits are set in `src/lib/rateLimit.ts`.
+
 ## Environment
 
 Copy `.env.example` → `.env.local` (or `vercel env pull`).

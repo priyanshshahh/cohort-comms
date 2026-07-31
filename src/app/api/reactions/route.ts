@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireUserId, toggleReaction } from '@/lib/data'
+import { rateLimited } from '@/lib/rateLimit'
 
 /** Emoji allowed on messages — a fixed set keeps the column predictable. */
 const ALLOWED = ['👍', '🎉', '🔥', '👀', '✅', '❤️']
@@ -12,6 +13,9 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const limited = await rateLimited(meId, 'reactions')
+  if (limited) return limited
 
   const payload = await request.json().catch(() => null)
   const messageId = Number(payload?.messageId)

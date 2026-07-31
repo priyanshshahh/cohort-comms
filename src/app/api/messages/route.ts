@@ -9,6 +9,7 @@ import {
   reactionsFor,
   requireUserId,
 } from '@/lib/data'
+import { rateLimited } from '@/lib/rateLimit'
 
 const MAX_BODY_LENGTH = 8000
 
@@ -64,6 +65,9 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+
+  const limited = await rateLimited(meId, 'messages')
+  if (limited) return limited
 
   const payload = await request.json().catch(() => null)
   const scope = parseScope(payload?.scope ?? null)
