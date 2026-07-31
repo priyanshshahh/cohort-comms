@@ -3,13 +3,13 @@
  * Comms links out to it, and renders pasted Forth URLs as ticket cards so a
  * conversation about a ticket carries the ticket with it.
  *
- * Forth exposes no public REST API or webhooks, so the integration is
- * link-level plus shared GitHub identity rather than server-to-server.
+ * Forth's outbound ship webhook is owned by Forth; this app is the receiver
+ * plus link-level cards and an embedded board. No shared auth or database.
  *
  * Important: Forth is a single-route SPA (`/`). Client views (board, today,
  * proof, settings) are React state — paths like `/board` return 404 on the
- * host. Deep-link cards therefore open the live root and label the intended
- * view so members land somewhere that works.
+ * host. Deep-link cards therefore open the live root with an allowlisted hash
+ * (`/#board`, `/#proof`) so members land on a view that works.
  */
 export const FORTH_BASE_URL = 'https://forth-bice.vercel.app'
 export const FORTH_REPO_URL = 'https://github.com/CodingWCal/forth'
@@ -23,8 +23,8 @@ export type ForthLink = {
 }
 
 /**
- * Human labels for Forth's in-app views. Keys match path segments people
- * paste (or that we seed in demos); the live app does not route them.
+ * Human labels for Forth's in-app views. Keys match path segments and hash
+ * routes people paste (or that Forth's webhook delivers).
  */
 const VIEW_LABELS: Record<string, string> = {
   '': 'Forth',
@@ -38,8 +38,9 @@ const VIEW_LABELS: Record<string, string> = {
 }
 
 /**
- * Forth only serves `/`. Rewrite view-ish paths to the working origin, keep a
- * hash hint (`#board`) for humans / future hash routing, and preserve label.
+ * Forth only serves `/`. Rewrite view-ish paths to the working origin and
+ * preserve allowlisted hashes (`#proof`, `#board`) instead of collapsing to
+ * the bare root — Calvin's ship webhook sends `/#proof` on purpose.
  */
 export function normalizeForthUrl(raw: string): ForthLink | null {
   let parsed: URL
@@ -50,16 +51,17 @@ export function normalizeForthUrl(raw: string): ForthLink | null {
   }
   if (parsed.host !== FORTH_HOST) return null
 
-  const segment = parsed.pathname.split('/').filter(Boolean)[0] ?? ''
-  const label = VIEW_LABELS[segment] ?? (segment ? `Forth · ${segment}` : 'Forth')
+  const pathSegment = parsed.pathname.split('/').filter(Boolean)[0] ?? ''
+  const hashSegment = parsed.hash.replace(/^#/, '').split(/[/?]/)[0] ?? ''
+  const view = pathSegment || hashSegment
+  const label =
+    VIEW_LABELS[view] ?? (view ? `Forth · ${view}` : 'Forth')
 
-  // Always open the live app root — `/board` etc. are 404 on production Forth.
-  const url =
-    segment && segment in VIEW_LABELS && segment !== ''
-      ? `${FORTH_BASE_URL}/#${segment}`
-      : `${FORTH_BASE_URL}/`
+  if (view && view in VIEW_LABELS && view !== '') {
+    return { url: `${FORTH_BASE_URL}/#${view}`, label }
+  }
 
-  return { url, label }
+  return { url: `${FORTH_BASE_URL}/`, label: 'Forth' }
 }
 
 /**

@@ -37,6 +37,24 @@ describe('Forth link handling', () => {
     expect(links[0].url).toBe(`${FORTH_BASE_URL}/#board`)
   })
 
+  it('preserves allowlisted hash routes from Forth ship payloads', () => {
+    const proof = extractForthLinks(`${FORTH_BASE_URL}/#proof`)
+    expect(proof).toHaveLength(1)
+    expect(proof[0].url).toBe(`${FORTH_BASE_URL}/#proof`)
+    expect(proof[0].label).toContain('Chronicle')
+
+    const board = extractForthLinks(`${FORTH_BASE_URL}/#board`)
+    expect(board).toHaveLength(1)
+    expect(board[0].url).toBe(`${FORTH_BASE_URL}/#board`)
+    expect(board[0].label).toContain('Realm Map')
+  })
+
+  it('keeps hash views when free-text sanitization rewrites the URL', () => {
+    expect(stripNonForthUrls(`See ${FORTH_BASE_URL}/#proof`)).toBe(
+      `See ${FORTH_BASE_URL}/#proof`
+    )
+  })
+
   it('refuses to card a lookalike domain', () => {
     // forth-bice.vercel.app.evil.com must not be treated as Forth.
     expect(extractForthLinks('https://forth-bice.vercel.app.evil.com/x')).toHaveLength(0)
@@ -244,8 +262,8 @@ describe('webhook free-text URL sanitization', () => {
   })
 
   it('keeps a genuine Forth link intact', () => {
-    expect(stripNonForthUrls(`See ${FORTH_BASE_URL}/board`)).toContain(
-      FORTH_BASE_URL
+    expect(stripNonForthUrls(`See ${FORTH_BASE_URL}/board`)).toBe(
+      `See ${FORTH_BASE_URL}/#board`
     )
   })
 
