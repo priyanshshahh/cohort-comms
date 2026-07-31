@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { requireUserId } from '@/lib/data'
+import { attachmentStorageMode } from '@/lib/policy'
 import { rateLimited } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
@@ -9,8 +10,10 @@ const MAX_BYTES = 900_000
 
 /**
  * POST /api/upload — image attachment for chat.
- * Prefers Vercel Blob when BLOB_READ_WRITE_TOKEN is set; otherwise returns a
- * data URL stored on the message row (fine at cohort scale for small images).
+ * Vercel Blob when BLOB_READ_WRITE_TOKEN is set. Without it, the data-URL
+ * fallback (stored on the message row) serves local development only; in
+ * production the route refuses instead, so the database never absorbs
+ * attachment bytes (issue #20).
  */
 export async function POST(request: NextRequest) {
   let meId: string
@@ -22,6 +25,17 @@ export async function POST(request: NextRequest) {
 
   const limited = await rateLimited(meId, 'upload')
   if (limited) return limited
+
+  const mode = attachmentStorageMode(
+    Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    process.env.NODE_ENV
+  )
+  if (mode === 'disabled') {
+    return NextResponse.json(
+      { error: 'attachments are disabled: file storage is not configured' },
+      { status: 503 }
+    )
+  }
 
   const form = await request.formData().catch(() => null)
   const file = form?.get('file')
@@ -38,7 +52,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
+  if (mode === 'blob') {
     const blob = await put(`comms/${Date.now()}-${file.name}`, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,
@@ -46,6 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: blob.url })
   }
 
+  // Development-only fallback: mode === 'data-url'.
   const buffer = Buffer.from(await file.arrayBuffer())
   const dataUrl = `data:${file.type};base64,${buffer.toString('base64')}`
   if (dataUrl.length > 1_200_000) {

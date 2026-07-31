@@ -46,7 +46,7 @@ registers as `pending` until an admin admits them.
 | Search + ⌘K | Postgres FTS; command palette |
 | Unread + presence | Per-conversation read cursors; online ~2 min |
 | @mentions | Autocomplete + notification bell |
-| Image attach | Vercel Blob when configured, else data URL |
+| Image attach | Vercel Blob when configured; without it, data URL in dev, disabled in production |
 | Typing indicators | Current conversation |
 | Catch me up | Skim recent others’ messages |
 | Light / dark | Theme toggle |
@@ -71,7 +71,6 @@ stand between this and being something a cohort should fully depend on.
 | Limitation | Impact | Issue |
 |---|---|---|
 | No message delete or edit | A message with a leaked key or a regretted screenshot is permanent short of manual SQL | [#19](https://github.com/priyanshshahh/cohort-comms/issues/19) |
-| Attachments stored in Postgres when Blob is unset | Database grows fast; encoded bytes ride along in every channel fetch | [#20](https://github.com/priyanshshahh/cohort-comms/issues/20) |
 | No rate limiting | One user or a bad retry loop can flood a channel and the row quota | [#21](https://github.com/priyanshshahh/cohort-comms/issues/21) |
 | No error monitoring | Production failures are found by someone noticing, not by an alert | [#22](https://github.com/priyanshshahh/cohort-comms/issues/22) |
 | No verified backup / restore | Neon retention unconfirmed, restore never tested, migrations applied by hand | [#23](https://github.com/priyanshshahh/cohort-comms/issues/23) |
@@ -172,7 +171,7 @@ Copy `.env.example` → `.env.local` (or `vercel env pull`).
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | For GitHub | OAuth app; callback `/api/auth/callback/github` |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | For Google | OAuth client; callback `/api/auth/callback/google` |
 | `FORTH_WEBHOOK_SECRET` | For webhook | Missing → `503` |
-| `BLOB_READ_WRITE_TOKEN` | Optional | Vercel Blob uploads |
+| `BLOB_READ_WRITE_TOKEN` | For attachments in production | Vercel Blob uploads; unset → uploads answer `503` in production, data-URL fallback in dev |
 | `ADMIN_HANDLES` | Optional | Default `rogerSuperBuilderAlpha,priyanshshahh` |
 | `ADMIN_EMAILS` | Optional | Needed for Google-only admins |
 
